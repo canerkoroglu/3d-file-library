@@ -1,0 +1,92 @@
+import Database from 'better-sqlite3';
+import { app } from 'electron';
+import path from 'path';
+import fs from 'fs';
+
+let db: Database.Database;
+
+export const initDatabase = async (): Promise<void> => {
+    const userDataPath = app.getPath('userData');
+    const dbPath = path.join(userDataPath, 'modelist.db');
+
+    // Ensure directory exists
+    fs.mkdirSync(userDataPath, { recursive: true });
+
+    db = new Database(dbPath);
+
+    // Enable foreign keys
+    db.pragma('foreign_keys = ON');
+
+    // Create tables
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS models (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      filename TEXT NOT NULL,
+      filepath TEXT NOT NULL UNIQUE,
+      display_name TEXT,
+      file_size INTEGER NOT NULL,
+      file_type TEXT NOT NULL CHECK(file_type IN ('stl', '3mf', 'obj')),
+      collection_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      modified_at DATETIME,
+      thumbnail_path TEXT,
+      FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS model_tags (
+      model_id INTEGER NOT NULL,
+      tag_id INTEGER NOT NULL,
+      PRIMARY KEY (model_id, tag_id),
+      FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS collections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('collection', 'watched')),
+      folder_path TEXT,
+      is_active INTEGER DEFAULT 1
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_models_filepath ON models(filepath);
+    CREATE INDEX IF NOT EXISTS idx_models_collection ON models(collection_id);
+    CREATE INDEX IF NOT EXISTS idx_model_tags_model ON model_tags(model_id);
+    CREATE INDEX IF NOT EXISTS idx_model_tags_tag ON model_tags(tag_id);
+  `);
+
+    // Insert default tags if they don't exist
+    const defaultTags = [
+        { name: 'Draft', color: '#fbbf24' },
+        { name: 'Final', color: '#60a5fa' },
+        { name: 'Multi-color', color: '#a78bfa' },
+        { name: 'Print Next', color: '#fb923c' },
+        { name: 'Printed', color: '#4ade80' },
+        { name: 'Prototype', color: '#f472b6' },
+        { name: 'Urgent', color: '#f87171' },
+    ];
+
+    const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name, color) VALUES (?, ?)');
+    defaultTags.forEach(tag => insertTag.run(tag.name, tag.color));
+
+    console.log('Database initialized successfully');
+};
+
+export const getDatabase = (): Database.Database => {
+    if (!db) {
+        throw new Error('Database not initialized');
+    }
+    return db;
+};
+
+export const closeDatabase = (): void => {
+    if (db) {
+        db.close();
+    }
+};

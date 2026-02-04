@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-[#1a1a1a] text-white antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    user-select: none;
+  }
+
+  /* Custom scrollbars */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-[#1a1a1a];
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-[#404040] rounded-md;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-[#505050];
+  }
+
+  /* Remove focus outlines, we'll add custom ones */
+  button:focus,
+  input:focus {
+    outline: none;
+  }
+}
+
+@layer components {
+
+  /* Card component */
+  .card {
+    @apply bg-[#2d2d2d] rounded-lg border border-[#404040] overflow-hidden;
+  }
+
+  .card:hover {
+    @apply border-[#3b82f6];
+  }
+
+  /* Buttons */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2;
+  }
+
+  .btn-primary {
+    @apply bg-[#3b82f6] text-white hover:bg-[#2563eb] active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply bg-[#2d2d2d] text-white border border-[#404040] hover:bg-[#353535] hover:border-[#505050];
+  }
+
+  .btn-ghost {
+    @apply text-white hover:bg-[#353535];
+  }
+
+  /* Input fields */
+  .input {
+    @apply w-full bg-[#1a1a1a] border border-[#404040] rounded-lg px-4 py-2 text-white placeholder:text-[#808080] transition-colors;
+  }
+
+  .input:focus {
+    @apply border-[#3b82f6] ring-1 ring-[#3b82f6];
+  }
+
+  /* Tags */
+  .tag {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold cursor-pointer transition-all duration-200;
+  }
+
+  .tag:hover {
+    @apply scale-105 shadow-lg;
+  }
+
+  .tag.active {
+    @apply ring-2 ring-white ring-offset-2 ring-offset-[#2d2d2d];
+  }
+
+  /* Sidebar items */
+  .sidebar-item {
+    @apply flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer;
+  }
+
+  .sidebar-item:hover {
+    @apply bg-[#353535];
+  }
+
+  .sidebar-item.active {
+    @apply bg-[#3b82f6] text-white;
+  }
+
+  .sidebar-item.inactive {
+    @apply text-[#a0a0a0] hover:text-white;
+  }
+
+  /* Model card styling */
+  .model-card {
+    @apply card transition-all duration-200 cursor-pointer;
+  }
+
+  .model-card:hover {
+    @apply transform scale-[1.02] shadow-xl;
+  }
+
+  .model-card:active {
+    @apply scale-[0.98];
+  }
+
+  /* Thumbnail container */
+  .thumbnail {
+    @apply aspect-square bg-[#232323] flex items-center justify-center overflow-hidden relative;
+  }
+
+  .thumbnail img {
+    @apply w-full h-full object-cover;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    @apply animate-spin rounded-full border-2 border-t-transparent border-[#3b82f6];
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  .glass {
+    @apply bg-white/10 backdrop-blur-md;
+  }
+}
