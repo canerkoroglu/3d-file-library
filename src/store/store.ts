@@ -19,6 +19,13 @@ interface AppState {
     duplicateGroups: DuplicateGroup[];
     wastedSpace: { totalWasted: number; groupCount: number } | null;
 
+    // Bulk operations
+    selectedModels: Set<number>;
+
+    // Sorting
+    sortBy: 'name' | 'created' | 'modified' | 'size';
+    sortOrder: 'asc' | 'desc';
+
     // Loading states
     isLoading: boolean;
 
@@ -37,6 +44,17 @@ interface AppState {
     setLoading: (loading: boolean) => void;
     openDuplicatesModal: () => void;
     closeDuplicatesModal: () => void;
+
+    // Bulk operations
+    toggleModelSelection: (id: number) => void;
+    selectAllModels: () => void;
+    clearSelection: () => void;
+    bulkDelete: () => Promise<void>;
+    bulkAddTag: (tagId: number) => Promise<void>;
+
+    // Sorting
+    setSortBy: (sortBy: 'name' | 'created' | 'modified' | 'size') => void;
+    setSortOrder: (order: 'asc' | 'desc') => void;
 
     // Async actions
     loadModels: () => Promise<void>;
@@ -67,6 +85,13 @@ export const useStore = create<AppState>((set, get) => ({
     wastedSpace: null,
     isLoading: false,
 
+    // Bulk operations state
+    selectedModels: new Set<number>(),
+
+    // Sorting state
+    sortBy: 'created',
+    sortOrder: 'desc',
+
     // Sync actions
     setModels: (models) => set({ models }),
     setTags: (tags) => set({ tags }),
@@ -87,15 +112,52 @@ export const useStore = create<AppState>((set, get) => ({
     openDuplicatesModal: () => set({ isDuplicatesModalOpen: true }),
     closeDuplicatesModal: () => set({ isDuplicatesModalOpen: false, duplicateGroups: [], wastedSpace: null }),
 
+    // Bulk operations
+    toggleModelSelection: (id) => set((state) => {
+        const newSelection = new Set(state.selectedModels);
+        if (newSelection.has(id)) {
+            newSelection.delete(id);
+        } else {
+            newSelection.add(id);
+        }
+        return { selectedModels: newSelection };
+    }),
+    selectAllModels: () => set((state) => ({
+        selectedModels: new Set(state.models.map(m => m.id))
+    })),
+    clearSelection: () => set({ selectedModels: new Set<number>() }),
+
+    // Sorting
+    setSortBy: (sortBy) => set({ sortBy }),
+    setSortOrder: (sortOrder) => set({ sortOrder }),
+
     // Async actions
     loadModels: async () => {
         set({ isLoading: true });
         try {
-            const filters: FilterOptions = {
-                collectionId: get().selectedCollection ?? undefined,
-                searchQuery: get().searchQuery || undefined,
-            };
-            const models = await window.electronAPI.getModels(filters);
+            const searchQuery = get().searchQuery;
+            const selectedCollection = get().selectedCollection;
+
+            let models: ModelWithTags[];
+
+            // Use fuzzy search if there's a search query
+            if (searchQuery && searchQuery.trim() !== '') {
+                models = await window.electronAPI.searchModels(searchQuery);
+
+                // Filter by collection if one is selected
+                if (selectedCollection !== null) {
+                    models = models.filter(m => m.collectionId === selectedCollection);
+                }
+            } else {
+                // Use regular getModels with filters
+                const filters: FilterOptions = {
+                    collectionId: selectedCollection ?? undefined,
+                    sortBy: get().sortBy,
+                    sortOrder: get().sortOrder
+                };
+                models = await window.electronAPI.getModels(filters);
+            }
+
             set({ models });
         } catch (error) {
             console.error('Failed to load models:', error);
@@ -180,6 +242,35 @@ export const useStore = create<AppState>((set, get) => ({
             await get().loadModels();
         } catch (error) {
             console.error('Failed to delete duplicate:', error);
+        }
+    },
+
+    bulkDelete: async () => {
+        const selectedIds = Array.from(get().selectedModels);
+        if (selectedIds.length === 0) return;
+
+        try {
+            // Delete each selected model
+            await Promise.all(selectedIds.map(id => window.electronAPI.deleteFile(id)));
+            // Clear selection and reload
+            set({ selectedModels: new Set<number>() });
+            await get().loadModels();
+        } catch (error) {
+            console.error('Failed to bulk delete:', error);
+        }
+    },
+
+    bulkAddTag: async (tagId) => {
+        const selectedIds = Array.from(get().selectedModels);
+        if (selectedIds.length === 0) return;
+
+        try {
+            // Add tag to each selected model
+            await Promise.all(selectedIds.map(id => window.electronAPI.addTagToModel(id, tagId)));
+            // Reload models to show updated tags
+            await get().loadModels();
+        } catch (error) {
+            console.error('Failed to bulk add tag:', error);
         }
     },
 }));

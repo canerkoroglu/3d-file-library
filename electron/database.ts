@@ -6,19 +6,19 @@ import fs from 'fs';
 let db: Database.Database;
 
 export const initDatabase = async (): Promise<void> => {
-    const userDataPath = app.getPath('userData');
-    const dbPath = path.join(userDataPath, 'modelist.db');
+  const userDataPath = app.getPath('userData');
+  const dbPath = path.join(userDataPath, 'modelist.db');
 
-    // Ensure directory exists
-    fs.mkdirSync(userDataPath, { recursive: true });
+  // Ensure directory exists
+  fs.mkdirSync(userDataPath, { recursive: true });
 
-    db = new Database(dbPath);
+  db = new Database(dbPath);
 
-    // Enable foreign keys
-    db.pragma('foreign_keys = ON');
+  // Enable foreign keys
+  db.pragma('foreign_keys = ON');
 
-    // Create tables
-    db.exec(`
+  // Create tables
+  db.exec(`
     CREATE TABLE IF NOT EXISTS models (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       filename TEXT NOT NULL,
@@ -30,6 +30,7 @@ export const initDatabase = async (): Promise<void> => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       modified_at DATETIME,
       thumbnail_path TEXT,
+      source_metadata TEXT,
       FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE SET NULL
     );
 
@@ -61,32 +62,42 @@ export const initDatabase = async (): Promise<void> => {
     CREATE INDEX IF NOT EXISTS idx_model_tags_tag ON model_tags(tag_id);
   `);
 
-    // Insert default tags if they don't exist
-    const defaultTags = [
-        { name: 'Draft', color: '#fbbf24' },
-        { name: 'Final', color: '#60a5fa' },
-        { name: 'Multi-color', color: '#a78bfa' },
-        { name: 'Print Next', color: '#fb923c' },
-        { name: 'Printed', color: '#4ade80' },
-        { name: 'Prototype', color: '#f472b6' },
-        { name: 'Urgent', color: '#f87171' },
-    ];
+  // Migration: Add source_metadata column if it doesn't exist
+  const tableInfo = db.prepare("PRAGMA table_info(models)").all() as Array<{ name: string }>;
+  const hasSourceMetadata = tableInfo.some(col => col.name === 'source_metadata');
 
-    const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name, color) VALUES (?, ?)');
-    defaultTags.forEach(tag => insertTag.run(tag.name, tag.color));
+  if (!hasSourceMetadata) {
+    console.log('Running migration: Adding source_metadata column...');
+    db.exec('ALTER TABLE models ADD COLUMN source_metadata TEXT');
+    console.log('Migration completed successfully');
+  }
 
-    console.log('Database initialized successfully');
+  // Insert default tags if they don't exist
+  const defaultTags = [
+    { name: 'Draft', color: '#fbbf24' },
+    { name: 'Final', color: '#60a5fa' },
+    { name: 'Multi-color', color: '#a78bfa' },
+    { name: 'Print Next', color: '#fb923c' },
+    { name: 'Printed', color: '#4ade80' },
+    { name: 'Prototype', color: '#f472b6' },
+    { name: 'Urgent', color: '#f87171' },
+  ];
+
+  const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name, color) VALUES (?, ?)');
+  defaultTags.forEach(tag => insertTag.run(tag.name, tag.color));
+
+  console.log('Database initialized successfully');
 };
 
 export const getDatabase = (): Database.Database => {
-    if (!db) {
-        throw new Error('Database not initialized');
-    }
-    return db;
+  if (!db) {
+    throw new Error('Database not initialized');
+  }
+  return db;
 };
 
 export const closeDatabase = (): void => {
-    if (db) {
-        db.close();
-    }
+  if (db) {
+    db.close();
+  }
 };

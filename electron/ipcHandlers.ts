@@ -7,7 +7,7 @@ import { generateThumbnail } from './thumbnailGenerator';
 import { startWatchingFolder, stopWatchingFolder } from './fileWatcher';
 import { findDuplicates, deleteModel, calculateWastedSpace } from './duplicatesFinder';
 
-export const setupIpcHandlers = (ipcMain: IpcMain): void => {
+export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | null): void => {
     const db = getDatabase();
 
     // ============ Model Operations ============
@@ -45,10 +45,19 @@ export const setupIpcHandlers = (ipcMain: IpcMain): void => {
 
         query += ' GROUP BY m.id';
 
-        // Add sorting
-        const sortBy = filters?.sortBy || 'created_at';
+        // Add sorting - map frontend values to database columns
+        const sortBy = filters?.sortBy || 'created';
         const sortOrder = filters?.sortOrder || 'desc';
-        query += ` ORDER BY m.${sortBy} ${sortOrder.toUpperCase()}`;
+
+        const sortColumnMap: Record<string, string> = {
+            'name': 'filename',
+            'created': 'created_at',
+            'modified': 'modified_at',
+            'size': 'file_size'
+        };
+
+        const sortColumn = sortColumnMap[sortBy] || 'created_at';
+        query += ` ORDER BY m.${sortColumn} ${sortOrder.toUpperCase()}`;
 
         const rows = db.prepare(query).all(...params) as any[];
 
@@ -73,6 +82,7 @@ export const setupIpcHandlers = (ipcMain: IpcMain): void => {
                 createdAt: row.created_at,
                 modifiedAt: row.modified_at,
                 thumbnailPath: row.thumbnail_path,
+                sourceMetadata: row.source_metadata ? JSON.parse(row.source_metadata) : undefined,
                 tags
             };
         });
@@ -94,7 +104,14 @@ export const setupIpcHandlers = (ipcMain: IpcMain): void => {
 
         const Fuse = (await import('fuse.js')).default;
         const fuse = new Fuse(allModels, {
-            keys: ['filename', 'displayName', 'tags.name'],
+            keys: [
+                'filename',
+                'displayName',
+                'tags.name',
+                'sourceMetadata.source',
+                'sourceMetadata.author',
+                'sourceMetadata.notes'
+            ],
             threshold: 0.4, // Match sensitivity (0.0 = exact, 1.0 = anything)
             distance: 100,
             includeScore: true
@@ -275,5 +292,16 @@ export const setupIpcHandlers = (ipcMain: IpcMain): void => {
 
     ipcMain.handle('calculate-wasted-space', async () => {
         return await calculateWastedSpace();
+    });
+
+    ipcMain.handle('update-model-metadata', async (_event, modelId: number, metadata: Record<string, any>) => {
+        const db = getDatabase();
+        const metadataJson = JSON.stringify(metadata);
+        db.prepare('UPDATE models SET source_metadata = ? WHERE id = ?').run(metadataJson, modelId);
+
+        // Notify renderer of update
+        if (mainWindow) {
+            mainWindow.webContents.send('models-updated');
+        }
     });
 };

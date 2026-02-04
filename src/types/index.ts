@@ -10,6 +10,13 @@ export interface Model {
     thumbnailPath?: string;
     fileType: 'stl' | '3mf' | 'obj';
     tags?: Tag[];
+    sourceMetadata?: {
+        source?: string;
+        url?: string;
+        author?: string;
+        license?: string;
+        notes?: string;
+    };
 }
 
 export interface Tag {
@@ -35,7 +42,7 @@ export interface FilterOptions {
     tagIds?: number[];
     searchQuery?: string;
     fileType?: 'stl' | '3mf' | 'obj';
-    sortBy?: 'name' | 'date' | 'size';
+    sortBy?: 'name' | 'created' | 'modified' | 'size';
     sortOrder?: 'asc' | 'desc';
 }
 
@@ -80,6 +87,7 @@ export interface ElectronAPI {
     openFolder: (path: string) => Promise<void>;
     findDuplicates: () => Promise<DuplicateGroup[]>;
     calculateWastedSpace: () => Promise<{ totalWasted: number; groupCount: number }>;
+    updateModelMetadata: (modelId: number, metadata: Record<string, any>) => Promise<void>;
 
     // Events
     onModelsUpdated: (callback: () => void) => void;

@@ -11,7 +11,11 @@ export default function FilterBar() {
         selectedTags,
         toggleTag,
         importFiles,
-        loadModels
+        loadModels,
+        sortBy,
+        sortOrder,
+        setSortBy,
+        setSortOrder
     } = useStore();
 
     const handleSearch = (value: string) => {
@@ -48,13 +52,34 @@ export default function FilterBar() {
                     <span>Import</span>
                 </button>
 
+                {/* Sort dropdown */}
+                <select
+                    value={`${sortBy}-${sortOrder}`}
+                    onChange={(e) => {
+                        const [newSortBy, newSortOrder] = e.target.value.split('-') as [typeof sortBy, typeof sortOrder];
+                        setSortBy(newSortBy);
+                        setSortOrder(newSortOrder);
+                        setTimeout(() => loadModels(), 100);
+                    }}
+                    className="input h-9 text-sm px-3 cursor-pointer"
+                >
+                    <option value="created-desc">Newest First</option>
+                    <option value="created-asc">Oldest First</option>
+                    <option value="name-asc">Name A-Z</option>
+                    <option value="name-desc">Name Z-A</option>
+                    <option value="size-desc">Largest First</option>
+                    <option value="size-asc">Smallest First</option>
+                    <option value="modified-desc">Recently Modified</option>
+                    <option value="modified-asc">Least Modified</option>
+                </select>
+
                 {/* View mode toggle */}
                 <div className="flex items-center bg-[#1a1a1a] rounded-lg p-1 border border-[#404040]">
                     <button
                         onClick={() => setViewMode('grid')}
                         className={`p-1.5 rounded transition-all duration-200 ${viewMode === 'grid'
-                                ? 'bg-[#3b82f6] text-white shadow-sm'
-                                : 'text-[#808080] hover:text-white hover:bg-[#353535]'
+                            ? 'bg-[#3b82f6] text-white shadow-sm'
+                            : 'text-[#808080] hover:text-white hover:bg-[#353535]'
                             }`}
                         title="Grid view"
                     >
@@ -63,8 +88,8 @@ export default function FilterBar() {
                     <button
                         onClick={() => setViewMode('list')}
                         className={`p-1.5 rounded transition-all duration-200 ${viewMode === 'list'
-                                ? 'bg-[#3b82f6] text-white shadow-sm'
-                                : 'text-[#808080] hover:text-white hover:bg-[#353535]'
+                            ? 'bg-[#3b82f6] text-white shadow-sm'
+                            : 'text-[#808080] hover:text-white hover:bg-[#353535]'
                             }`}
                         title="List view"
                     >

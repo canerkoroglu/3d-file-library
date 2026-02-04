@@ -6,7 +6,7 @@ import ModelGrid from './components/ModelGrid';
 import ModelViewer from './components/ModelViewer';
 import DuplicatesModal from './components/DuplicatesModal';
 import SettingsModal from './components/SettingsModal';
-import { Box } from 'lucide-react';
+import BulkActionsBar from './components/BulkActionsBar';
 
 function App() {
     const {
@@ -48,19 +48,19 @@ function App() {
 
     return (
         <div className="h-screen w-screen flex flex-col bg-[#1a1a1a] overflow-hidden text-white">
-            {/* Title bar - macOS style */}
-            <div className="h-12 bg-[#2d2d2d] border-b border-[#404040] flex items-center pl-20 pr-4 flex-shrink-0" style={{ WebkitAppRegion: 'drag' } as any}>
-                <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                    <div className="w-7 h-7 bg-gradient-to-br from-[#3b82f6] to-[#2563eb] rounded-lg flex items-center justify-center shadow-lg">
-                        <Box size={16} className="text-white" strokeWidth={2.5} />
-                    </div>
-                    <span className="font-semibold text-lg tracking-tight">Modelist</span>
-                    {!window.electronAPI && (
-                        <span className="text-xs text-red-500 bg-red-900/20 px-2 py-1 rounded border border-red-500/50">
+            {/* Title bar - macOS style with centered title */}
+            <div className="h-12 bg-[#2d2d2d] border-b border-[#404040] flex items-center justify-center px-20 flex-shrink-0 relative" style={{ WebkitAppRegion: 'drag' } as any}>
+                {/* Centered title */}
+                <span className="text-sm font-medium text-[#e0e0e0] tracking-wide">Modelist</span>
+
+                {/* API status badge - positioned absolutely on the right */}
+                {!window.electronAPI && (
+                    <div className="absolute right-4" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                        <span className="text-xs text-red-400 bg-red-900/20 px-2 py-1 rounded border border-red-500/30">
                             API Disconnected
                         </span>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
 
             {/* Main content area */}
@@ -86,6 +86,9 @@ function App() {
 
             {/* Settings modal */}
             {isSettingsOpen && <SettingsModal />}
+
+            {/* Bulk actions bar */}
+            <BulkActionsBar />
         </div>
     );
 }

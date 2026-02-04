@@ -29,6 +29,7 @@ const electronAPI = {
     openFolder: (path) => ipcRenderer.invoke('open-folder', path),
     findDuplicates: () => ipcRenderer.invoke('find-duplicates'),
     calculateWastedSpace: () => ipcRenderer.invoke('calculate-wasted-space'),
+    updateModelMetadata: (modelId, metadata) => ipcRenderer.invoke('update-model-metadata', modelId, metadata),
 
     // Events
     onModelsUpdated: (callback) => {

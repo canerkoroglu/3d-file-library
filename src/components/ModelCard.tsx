@@ -8,7 +8,8 @@ interface ModelCardProps {
 }
 
 export default function ModelCard({ model, viewMode }: ModelCardProps) {
-    const { openViewer } = useStore();
+    const { openViewer, selectedModels, toggleModelSelection } = useStore();
+    const isSelected = selectedModels.has(model.id);
 
     const formatFileSize = (bytes: number): string => {
         if (bytes < 1024) return bytes + ' B';
@@ -73,6 +74,24 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
                     </div>
                 )}
 
+                {/* Selection checkbox overlay */}
+                <div
+                    className={`absolute top-2 left-2 w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-all ${isSelected
+                        ? 'bg-[#3b82f6] border-[#3b82f6]'
+                        : 'bg-black/40 border-white/60 hover:bg-black/60'
+                        }`}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        toggleModelSelection(model.id);
+                    }}
+                >
+                    {isSelected && (
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                    )}
+                </div>
+
                 {/* Hover overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end justify-center pb-4">
                     <div className="flex gap-2">
@@ -97,6 +116,13 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
                 <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-sm rounded text-[10px] font-bold text-white uppercase">
                     {model.fileType}
                 </div>
+
+                {/* Source badge */}
+                {model.sourceMetadata?.source && (
+                    <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-blue-500/80 backdrop-blur-sm rounded text-[10px] font-semibold text-white flex items-center gap-1">
+                        <span>{model.sourceMetadata.source}</span>
+                    </div>
+                )}
             </div>
 
             {/* Info */}

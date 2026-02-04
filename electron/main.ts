@@ -66,7 +66,7 @@ app.whenReady().then(async () => {
     await initDatabase();
 
     // Set up IPC handlers
-    setupIpcHandlers(ipcMain);
+    setupIpcHandlers(ipcMain, mainWindow);
 
     // Create window
     createWindow();
