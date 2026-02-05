@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { STLLoader } from 'three-stdlib';
 import { ThreeMFLoader } from 'three-stdlib';
 import { OBJLoader } from 'three-stdlib';
@@ -124,6 +124,27 @@ export default function GenericModel({ filepath, fileType }: GenericModelProps) 
                 object.scale.set(scale, scale, scale);
             }
         }
+    }, [geometry, object]);
+
+    // Clean up resources on unmount
+    useEffect(() => {
+        return () => {
+            if (geometry) {
+                geometry.dispose();
+            }
+            if (object) {
+                object.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        child.geometry.dispose();
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => m.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
+                });
+            }
+        };
     }, [geometry, object]);
 
     if (error) {

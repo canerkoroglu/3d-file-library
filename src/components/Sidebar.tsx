@@ -1,4 +1,5 @@
-import { Folder, FolderOpen, Plus, Settings, Inbox, Copy, X, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { Folder, FolderOpen, Plus, Settings, Inbox, Copy, X, RefreshCw, Edit2 } from 'lucide-react';
 import { useStore } from '../store/store';
 
 export default function Sidebar() {
@@ -6,6 +7,55 @@ export default function Sidebar() {
 
     const watchedFolders = collections.filter(c => c.type === 'watched');
     const userCollections = collections.filter(c => c.type === 'collection');
+
+    const [isCreatingCollection, setIsCreatingCollection] = useState(false);
+    const [newCollectionName, setNewCollectionName] = useState('');
+    const [editingCollection, setEditingCollection] = useState<{ id: number, name: string } | null>(null);
+
+    const handleCreateCollection = async () => {
+        if (!newCollectionName.trim()) return;
+        try {
+            await window.electronAPI.createCollection(newCollectionName);
+            // Reload collections
+            const newCollections = await window.electronAPI.getCollections();
+            useStore.getState().setCollections(newCollections);
+            setNewCollectionName('');
+            setIsCreatingCollection(false);
+        } catch (error) {
+            console.error('Failed to create collection:', error);
+        }
+    };
+
+    const handleRenameCollection = async (id: number, newName: string) => {
+        if (!newName.trim() || newName === editingCollection?.name) {
+            setEditingCollection(null);
+            return;
+        }
+
+        try {
+            await window.electronAPI.renameCollection(id, newName);
+            const newCollections = await window.electronAPI.getCollections();
+            useStore.getState().setCollections(newCollections);
+        } catch (error) {
+            console.error('Failed to rename collection:', error);
+        } finally {
+            setEditingCollection(null);
+        }
+    };
+
+    const handleDeleteCollection = async (id: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm('Are you sure you want to delete this collection? Models inside will not be deleted.')) return;
+
+        try {
+            await window.electronAPI.deleteCollection(id);
+            const newCollections = await window.electronAPI.getCollections();
+            useStore.getState().setCollections(newCollections);
+            if (selectedCollection === id) setSelectedCollection(null);
+        } catch (error) {
+            console.error('Failed to delete collection:', error);
+        }
+    };
 
     const handleAddWatchedFolder = async () => {
         try {
@@ -55,9 +105,19 @@ export default function Sidebar() {
             <div className="flex-1 overflow-y-auto p-3 space-y-6">
                 {/* All Models / Inbox */}
                 <div>
-                    <h3 className="text-[10px] font-bold text-[#808080] uppercase tracking-wider mb-2 px-3">
-                        Collections
-                    </h3>
+                    <div className="flex items-center justify-between mb-2 px-3">
+                        <h3 className="text-[10px] font-bold text-[#808080] uppercase tracking-wider">
+                            Collections
+                        </h3>
+                        <button
+                            onClick={() => setIsCreatingCollection(true)}
+                            className="p-1.5 hover:bg-[#353535] rounded-md transition-colors group"
+                            title="Create Collection"
+                        >
+                            <Plus size={14} className="text-[#808080] group-hover:text-white transition-colors" />
+                        </button>
+                    </div>
+
                     <div className="space-y-0.5">
                         <button
                             onClick={() => setSelectedCollection(null)}
@@ -66,15 +126,85 @@ export default function Sidebar() {
                             <Inbox size={18} />
                             <span>All Models</span>
                         </button>
+
+                        {/* Creation Input */}
+                        {isCreatingCollection && (
+                            <div className="px-2 py-1">
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={newCollectionName}
+                                    onChange={(e) => setNewCollectionName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleCreateCollection();
+                                        if (e.key === 'Escape') {
+                                            setIsCreatingCollection(false);
+                                            setNewCollectionName('');
+                                        }
+                                    }}
+                                    onBlur={() => {
+                                        if (!newCollectionName.trim()) {
+                                            setIsCreatingCollection(false);
+                                            setNewCollectionName('');
+                                        }
+                                    }}
+                                    placeholder="Collection name..."
+                                    className="w-full bg-[#1a1a1a] text-white text-sm px-2 py-1.5 rounded border border-[#3b82f6] focus:outline-none"
+                                />
+                            </div>
+                        )}
+
                         {userCollections.map((collection) => (
-                            <button
+                            <div
                                 key={collection.id}
+                                className={`sidebar-item w-full group ${selectedCollection === collection.id ? 'active' : 'inactive'}`}
                                 onClick={() => setSelectedCollection(collection.id)}
-                                className={`sidebar-item w-full ${selectedCollection === collection.id ? 'active' : 'inactive'}`}
                             >
                                 <Folder size={18} />
-                                <span className="truncate">{collection.name}</span>
-                            </button>
+                                {editingCollection?.id === collection.id ? (
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={editingCollection.name}
+                                        onChange={(e) => setEditingCollection({ ...editingCollection, name: e.target.value })}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleRenameCollection(collection.id, editingCollection.name);
+                                            if (e.key === 'Escape') setEditingCollection(null);
+                                        }}
+                                        onBlur={() => handleRenameCollection(collection.id, editingCollection.name)}
+                                        className="flex-1 bg-[#1a1a1a] text-white text-sm px-1 rounded border border-[#3b82f6] focus:outline-none min-w-0"
+                                    />
+                                ) : (
+                                    <>
+                                        <span className="truncate flex-1 text-left" onDoubleClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingCollection({ id: collection.id, name: collection.name });
+                                        }}>
+                                            {collection.name}
+                                        </span>
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditingCollection({ id: collection.id, name: collection.name });
+                                                }}
+                                                className="p-1 hover:bg-[#353535] rounded-md transition-colors"
+                                                title="Rename"
+                                            >
+                                                <Edit2 size={12} className="text-[#808080] hover:text-white" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => handleDeleteCollection(collection.id, e)}
+                                                className="p-1 hover:bg-red-500/20 rounded-md transition-colors"
+                                                title="Delete"
+                                            >
+                                                <X size={12} className="text-[#808080] hover:text-red-400" />
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         ))}
                     </div>
                 </div>

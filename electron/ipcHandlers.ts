@@ -35,17 +35,21 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
 
     const getModelsFromDb = (filters?: FilterOptions): ModelWithTags[] => {
         let query = `
-      SELECT m.*, GROUP_CONCAT(t.id || ':' || t.name || ':' || t.color) as tags_data
+      SELECT m.*, 
+             GROUP_CONCAT(DISTINCT t.id || ':' || t.name || ':' || t.color) as tags_data,
+             GROUP_CONCAT(DISTINCT mc.collection_id) as collection_ids
       FROM models m
       LEFT JOIN model_tags mt ON m.id = mt.model_id
       LEFT JOIN tags t ON mt.tag_id = t.id
+      LEFT JOIN model_collections mc ON m.id = mc.model_id
     `;
 
         const conditions: string[] = [];
         const params: any[] = [];
 
         if (filters?.collectionId) {
-            conditions.push('m.collection_id = ?');
+            // Check if the model is in the specific collection using the junction table
+            conditions.push('m.id IN (SELECT model_id FROM model_collections WHERE collection_id = ?)');
             params.push(filters.collectionId);
         }
 
@@ -58,6 +62,18 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
             conditions.push('(m.filename LIKE ? OR m.display_name LIKE ?)');
             const searchPattern = `%${filters.searchQuery}%`;
             params.push(searchPattern, searchPattern);
+        }
+
+        // Tag filtering
+        if (filters?.tagIds && filters.tagIds.length > 0) {
+            const placeholders = filters.tagIds.map(() => '?').join(',');
+            conditions.push(`m.id IN (
+                SELECT model_id FROM model_tags 
+                WHERE tag_id IN (${placeholders})
+                GROUP BY model_id
+                HAVING COUNT(DISTINCT tag_id) = ?
+             )`);
+            params.push(...filters.tagIds, filters.tagIds.length);
         }
 
         if (conditions.length > 0) {
@@ -92,6 +108,13 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
                 });
             }
 
+            const collectionIds: number[] = [];
+            if (row.collection_ids) {
+                row.collection_ids.split(',').forEach((id: string) => {
+                    collectionIds.push(parseInt(id));
+                });
+            }
+
             return {
                 id: row.id,
                 filename: row.filename,
@@ -99,7 +122,7 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
                 displayName: row.display_name,
                 fileSize: row.file_size,
                 fileType: row.file_type,
-                collectionId: row.collection_id,
+                collectionIds, // New property
                 createdAt: row.created_at,
                 modifiedAt: row.modified_at,
                 thumbnailPath: row.thumbnail_path,
@@ -254,6 +277,17 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
         };
     });
 
+    handle('delete-collection', async (_event, id: number): Promise<void> => {
+        // Remove relationships from model_collections
+        db.prepare('DELETE FROM model_collections WHERE collection_id = ?').run(id);
+        // Delete the collection itself
+        db.prepare('DELETE FROM collections WHERE id = ?').run(id);
+    });
+
+    handle('rename-collection', async (_event, id: number, newName: string): Promise<void> => {
+        db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(newName, id);
+    });
+
     handle('add-watched-folder', async (event, folderPath?: string): Promise<Collection> => {
         console.log('IPC: add-watched-folder called', { folderPath });
         if (!folderPath) {
@@ -319,6 +353,17 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
         } else {
             console.error('[IPC] Cannot send models-updated: mainWindow is null');
         }
+    });
+
+    handle('add-model-to-collection', async (_event, modelId: number, collectionId: number): Promise<void> => {
+        // Insert if not exists
+        db.prepare('INSERT OR IGNORE INTO model_collections (model_id, collection_id) VALUES (?, ?)').run(modelId, collectionId);
+        console.log(`[IPC] Added model ${modelId} to collection ${collectionId}`);
+    });
+
+    handle('remove-model-from-collection', async (_event, modelId: number, collectionId: number): Promise<void> => {
+        db.prepare('DELETE FROM model_collections WHERE model_id = ? AND collection_id = ?').run(modelId, collectionId);
+        console.log(`[IPC] Removed model ${modelId} from collection ${collectionId}`);
     });
 
     handle('refresh-watched-folders', async (): Promise<void> => {

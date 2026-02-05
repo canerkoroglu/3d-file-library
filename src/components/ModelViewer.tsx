@@ -1,7 +1,7 @@
-import { Suspense, useRef } from 'react';
+import { Suspense, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, PerspectiveCamera, Environment } from '@react-three/drei';
-import { X, Tag as TagIcon, ExternalLink, Folder, Camera } from 'lucide-react';
+import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus } from 'lucide-react';
 import { useStore } from '../store/store';
 import GenericModel from './GenericModel';
 
@@ -23,6 +23,28 @@ export default function ModelViewer() {
             await removeTagFromModel(selectedModel.id, tagId);
         } else {
             await addTagToModel(selectedModel.id, tagId);
+        }
+    };
+
+    // Tag Creation State
+    const [isCreatingTag, setIsCreatingTag] = useState(false);
+    const [newTagName, setNewTagName] = useState('');
+    const [newTagColor, setNewTagColor] = useState('#3b82f6');
+
+    const handleCreateTag = async () => {
+        if (!newTagName.trim()) return;
+        try {
+            const { createTag } = useStore.getState();
+            await createTag(newTagName, newTagColor);
+
+            // Should verify if we need to manually assign it or if just creating it is enough
+            // For now, let's just create it. The store will reload tags.
+
+            setNewTagName('');
+            setIsCreatingTag(false);
+            // newTagColor remains as last used, or reset if desired
+        } catch (error) {
+            console.error('Failed to create tag:', error);
         }
     };
 
@@ -100,7 +122,7 @@ export default function ModelViewer() {
                         <Canvas
                             shadows
                             ref={canvasRef as any}
-                            gl={{ preserveDrawingBuffer: true }}
+                            gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
                         >
                             <PerspectiveCamera makeDefault position={[0, 0, 5]} fov={50} />
                             <OrbitControls
@@ -177,6 +199,7 @@ export default function ModelViewer() {
                             <div>
                                 <h3 className="text-sm font-semibold mb-3 text-white">Model Information</h3>
                                 <div className="space-y-3 text-sm">
+                                    {/* ... existing info fields ... */}
                                     <div>
                                         <div className="text-[#808080] text-xs mb-1">Filename</div>
                                         <div className="text-white break-all bg-[#1a1a1a] px-3 py-2 rounded-lg">{selectedModel.filename}</div>
@@ -191,6 +214,53 @@ export default function ModelViewer() {
                                             <div className="text-white bg-[#1a1a1a] px-3 py-2 rounded-lg uppercase">{selectedModel.fileType}</div>
                                         </div>
                                     </div>
+
+                                    {/* Collection Assignment */}
+                                    <div>
+                                        <div className="text-[#808080] text-xs mb-2">Collections</div>
+                                        <div className="bg-[#1a1a1a] rounded-lg border border-[#404040] p-2 max-h-40 overflow-y-auto space-y-1">
+                                            {useStore.getState().collections
+                                                .filter(c => c.type === 'collection')
+                                                .map(c => {
+                                                    const isChecked = selectedModel.collectionIds?.includes(c.id);
+                                                    return (
+                                                        <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-[#252525] rounded cursor-pointer group select-none">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isChecked || false}
+                                                                className="w-4 h-4 rounded border-gray-600 bg-[#2d2d2d] text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 accent-blue-500"
+                                                                onChange={async (e) => {
+                                                                    const checked = e.target.checked;
+                                                                    console.log(`Toggling collection ${c.name} (ID: ${c.id}) to ${checked}`);
+
+                                                                    // Optimistic UI update could be added here, but for now we rely on store refresh
+                                                                    try {
+                                                                        if (checked) {
+                                                                            await window.electronAPI.addModelToCollection(selectedModel.id, c.id);
+                                                                        } else {
+                                                                            await window.electronAPI.removeModelFromCollection(selectedModel.id, c.id);
+                                                                        }
+                                                                        // Refresh model data
+                                                                        const { loadModels } = useStore.getState();
+                                                                        await loadModels();
+                                                                    } catch (error) {
+                                                                        console.error('Failed to update collection:', error);
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <span className="text-white text-sm">{c.name}</span>
+                                                        </label>
+                                                    );
+                                                })
+                                            }
+                                            {useStore.getState().collections.filter(c => c.type === 'collection').length === 0 && (
+                                                <div className="text-[#606060] text-xs text-center py-2 italic">
+                                                    No collections created yet.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     <div>
                                         <div className="text-[#808080] text-xs mb-1">Location</div>
                                         <div className="text-white text-xs break-all bg-[#1a1a1a] px-3 py-2 rounded-lg font-mono">
@@ -224,6 +294,47 @@ export default function ModelViewer() {
                                             </button>
                                         );
                                     })}
+
+                                    {/* New Tag Button */}
+                                    {!isCreatingTag ? (
+                                        <button
+                                            onClick={() => setIsCreatingTag(true)}
+                                            className="tag bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors border border-dashed border-white/20"
+                                        >
+                                            + New Tag
+                                        </button>
+                                    ) : (
+                                        <div className="flex items-center gap-2 bg-[#1a1a1a] p-1 rounded border border-[#3b82f6]">
+                                            <input
+                                                autoFocus
+                                                type="text"
+                                                value={newTagName}
+                                                onChange={(e) => setNewTagName(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleCreateTag();
+                                                    if (e.key === 'Escape') {
+                                                        setIsCreatingTag(false);
+                                                        setNewTagName('');
+                                                    }
+                                                }}
+                                                placeholder="Tag name..."
+                                                className="bg-transparent text-white text-xs w-20 focus:outline-none"
+                                            />
+                                            <input
+                                                type="color"
+                                                value={newTagColor}
+                                                onChange={(e) => setNewTagColor(e.target.value)}
+                                                className="w-4 h-4 rounded cursor-pointer border-none p-0 bg-transparent"
+                                                title="Choose color"
+                                            />
+                                            <button
+                                                onClick={handleCreateTag}
+                                                className="text-[#3b82f6] hover:text-white transition-colors"
+                                            >
+                                                <Plus size={12} />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

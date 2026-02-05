@@ -93,16 +93,31 @@ export const useStore = create<AppState>((set, get) => ({
     sortOrder: 'desc',
 
     // Sync actions
+    // Sync actions
     setModels: (models) => set({ models }),
     setTags: (tags) => set({ tags }),
     setCollections: (collections) => set({ collections }),
-    setSelectedCollection: (id) => set({ selectedCollection: id }),
-    toggleTag: (tagId) => set((state) => ({
-        selectedTags: state.selectedTags.includes(tagId)
-            ? state.selectedTags.filter(id => id !== tagId)
-            : [...state.selectedTags, tagId]
-    })),
-    setSearchQuery: (query) => set({ searchQuery: query }),
+
+    setSelectedCollection: (id) => {
+        set({ selectedCollection: id });
+        get().loadModels();
+    },
+
+    toggleTag: (tagId) => {
+        set((state) => ({
+            selectedTags: state.selectedTags.includes(tagId)
+                ? state.selectedTags.filter(id => id !== tagId)
+                : [...state.selectedTags, tagId]
+        }));
+        get().loadModels();
+    },
+
+    setSearchQuery: (query) => {
+        set({ searchQuery: query });
+        // Debounce could be added here, but for now triggering loadModels
+        get().loadModels();
+    },
+
     setViewMode: (mode) => set({ viewMode: mode }),
     openViewer: (model) => set({ selectedModel: model, isViewerOpen: true }),
     closeViewer: () => set({ isViewerOpen: false, selectedModel: null }),
@@ -128,16 +143,20 @@ export const useStore = create<AppState>((set, get) => ({
     clearSelection: () => set({ selectedModels: new Set<number>() }),
 
     // Sorting
-    setSortBy: (sortBy) => set({ sortBy }),
-    setSortOrder: (sortOrder) => set({ sortOrder }),
+    setSortBy: (sortBy) => {
+        set({ sortBy });
+        get().loadModels();
+    },
+    setSortOrder: (sortOrder) => {
+        set({ sortOrder });
+        get().loadModels();
+    },
 
     // Async actions
     loadModels: async () => {
         set({ isLoading: true });
         try {
-            const searchQuery = get().searchQuery;
-            const selectedCollection = get().selectedCollection;
-
+            const { searchQuery, selectedCollection, selectedTags } = get();
             let models: ModelWithTags[];
 
             // Use fuzzy search if there's a search query
@@ -148,10 +167,18 @@ export const useStore = create<AppState>((set, get) => ({
                 if (selectedCollection !== null) {
                     models = models.filter(m => m.collectionId === selectedCollection);
                 }
+
+                // Filter by tags locally for search results
+                if (selectedTags.length > 0) {
+                    models = models.filter(m =>
+                        selectedTags.every(tagId => m.tags?.some(t => t.id === tagId))
+                    );
+                }
             } else {
                 // Use regular getModels with filters
                 const filters: FilterOptions = {
                     collectionId: selectedCollection ?? undefined,
+                    tagIds: selectedTags.length > 0 ? selectedTags : undefined,
                     sortBy: get().sortBy,
                     sortOrder: get().sortOrder
                 };
@@ -159,6 +186,16 @@ export const useStore = create<AppState>((set, get) => ({
             }
 
             set({ models });
+
+            // Also update selectedModel if it exists in the new list to keep it fresh
+            const selectedModelId = get().selectedModel?.id;
+            if (selectedModelId) {
+                const updatedSelectedModel = models.find(m => m.id === selectedModelId);
+                if (updatedSelectedModel) {
+                    set({ selectedModel: updatedSelectedModel });
+                }
+            }
+
         } catch (error) {
             console.error('Failed to load models:', error);
         } finally {
@@ -203,20 +240,69 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     addTagToModel: async (modelId, tagId) => {
+        // Optimistic update
+        const { models, selectedModel, tags } = get();
+        const tagToAdd = tags.find(t => t.id === tagId);
+
+        if (tagToAdd) {
+            // Update selectedModel immediately
+            if (selectedModel && selectedModel.id === modelId) {
+                const currentTags = selectedModel.tags || [];
+                if (!currentTags.some(t => t.id === tagId)) {
+                    set({ selectedModel: { ...selectedModel, tags: [...currentTags, tagToAdd] } });
+                }
+            }
+
+            // Update models list immediately
+            const updatedModels = models.map(m => {
+                if (m.id === modelId) {
+                    const currentTags = m.tags || [];
+                    if (!currentTags.some(t => t.id === tagId)) {
+                        return { ...m, tags: [...currentTags, tagToAdd] };
+                    }
+                }
+                return m;
+            });
+            set({ models: updatedModels });
+        }
+
         try {
             await window.electronAPI.addTagToModel(modelId, tagId);
-            await get().loadModels();
         } catch (error) {
             console.error('Failed to add tag to model:', error);
+            await get().loadModels();
         }
     },
 
     removeTagFromModel: async (modelId, tagId) => {
+        // Optimistic update
+        const { models, selectedModel } = get();
+
+        // Update selectedModel immediately
+        if (selectedModel && selectedModel.id === modelId) {
+            const currentTags = selectedModel.tags || [];
+            if (currentTags.some(t => t.id === tagId)) {
+                set({ selectedModel: { ...selectedModel, tags: currentTags.filter(t => t.id !== tagId) } });
+            }
+        }
+
+        // Update models list immediately
+        const updatedModels = models.map(m => {
+            if (m.id === modelId) {
+                const currentTags = m.tags || [];
+                if (currentTags.some(t => t.id === tagId)) {
+                    return { ...m, tags: currentTags.filter(t => t.id !== tagId) };
+                }
+            }
+            return m;
+        });
+        set({ models: updatedModels });
+
         try {
             await window.electronAPI.removeTagFromModel(modelId, tagId);
-            await get().loadModels();
         } catch (error) {
             console.error('Failed to remove tag from model:', error);
+            await get().loadModels();
         }
     },
 
@@ -236,9 +322,7 @@ export const useStore = create<AppState>((set, get) => ({
     deleteDuplicate: async (modelId) => {
         try {
             await window.electronAPI.deleteFile(modelId);
-            // Refresh duplicates list
             await get().checkForDuplicates();
-            // Refresh main model list
             await get().loadModels();
         } catch (error) {
             console.error('Failed to delete duplicate:', error);
@@ -250,9 +334,7 @@ export const useStore = create<AppState>((set, get) => ({
         if (selectedIds.length === 0) return;
 
         try {
-            // Delete each selected model
             await Promise.all(selectedIds.map(id => window.electronAPI.deleteFile(id)));
-            // Clear selection and reload
             set({ selectedModels: new Set<number>() });
             await get().loadModels();
         } catch (error) {
@@ -265,9 +347,7 @@ export const useStore = create<AppState>((set, get) => ({
         if (selectedIds.length === 0) return;
 
         try {
-            // Add tag to each selected model
             await Promise.all(selectedIds.map(id => window.electronAPI.addTagToModel(id, tagId)));
-            // Reload models to show updated tags
             await get().loadModels();
         } catch (error) {
             console.error('Failed to bulk add tag:', error);

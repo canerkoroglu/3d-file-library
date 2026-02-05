@@ -1,4 +1,4 @@
-import { Search, Upload, Grid, List } from 'lucide-react';
+import { Search, Grid, List } from 'lucide-react';
 import { useStore } from '../store/store';
 
 export default function FilterBar() {
@@ -10,7 +10,7 @@ export default function FilterBar() {
         tags,
         selectedTags,
         toggleTag,
-        importFiles,
+        /* importFiles removed */
         loadModels,
         sortBy,
         sortOrder,
@@ -43,14 +43,7 @@ export default function FilterBar() {
                     />
                 </div>
 
-                {/* Actions */}
-                <button
-                    onClick={importFiles}
-                    className="btn btn-primary h-9 text-sm px-4"
-                >
-                    <Upload size={16} />
-                    <span>Import</span>
-                </button>
+                {/* Import button removed per user request */}
 
                 {/* Sort dropdown */}
                 <select

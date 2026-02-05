@@ -56,10 +56,20 @@ export const initDatabase = async (): Promise<void> => {
       is_active INTEGER DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS model_collections (
+      model_id INTEGER NOT NULL,
+      collection_id INTEGER NOT NULL,
+      PRIMARY KEY (model_id, collection_id),
+      FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE,
+      FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_models_filepath ON models(filepath);
-    CREATE INDEX IF NOT EXISTS idx_models_collection ON models(collection_id);
+    CREATE INDEX IF NOT EXISTS idx_models_collection ON models(collection_id); -- kept for legacy support until fully dropped
     CREATE INDEX IF NOT EXISTS idx_model_tags_model ON model_tags(model_id);
     CREATE INDEX IF NOT EXISTS idx_model_tags_tag ON model_tags(tag_id);
+    CREATE INDEX IF NOT EXISTS idx_model_collections_model ON model_collections(model_id);
+    CREATE INDEX IF NOT EXISTS idx_model_collections_collection ON model_collections(collection_id);
   `);
 
   // Migration: Add source_metadata column if it doesn't exist
@@ -70,6 +80,22 @@ export const initDatabase = async (): Promise<void> => {
     console.log('Running migration: Adding source_metadata column...');
     db.exec('ALTER TABLE models ADD COLUMN source_metadata TEXT');
     console.log('Migration completed successfully');
+  }
+
+  // Migration: Move collection_id to model_collections table
+  const hasModelCollections = db.prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='model_collections'").get() as { count: number };
+  if (hasModelCollections.count > 0) {
+    const isNewTableEmpty = (db.prepare("SELECT COUNT(*) as count FROM model_collections").get() as { count: number }).count === 0;
+    const hasLegacyData = (db.prepare("SELECT COUNT(*) as count FROM models WHERE collection_id IS NOT NULL").get() as { count: number }).count > 0;
+
+    if (isNewTableEmpty && hasLegacyData) {
+      console.log('Running migration: Moving collection_id to model_collections...');
+      db.exec(`
+            INSERT INTO model_collections (model_id, collection_id)
+            SELECT id, collection_id FROM models WHERE collection_id IS NOT NULL
+          `);
+      console.log('Migration to model_collections completed.');
+    }
   }
 
   // Insert default tags if they don't exist

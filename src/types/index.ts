@@ -4,7 +4,7 @@ export interface Model {
     filepath: string;
     displayName?: string;
     fileSize: number;
-    collectionId?: number;
+    collectionIds?: number[];
     createdAt: string;
     modifiedAt?: string;
     thumbnailPath?: string;
@@ -66,6 +66,8 @@ export interface ElectronAPI {
     searchModels: (query: string) => Promise<ModelWithTags[]>;
     importFiles: () => Promise<Model[]>;
     deleteFile: (id: number) => Promise<void>;
+    addModelToCollection: (modelId: number, collectionId: number) => Promise<void>;
+    removeModelFromCollection: (modelId: number, collectionId: number) => Promise<void>;
 
     // Tag operations
     getTags: () => Promise<Tag[]>;
@@ -76,6 +78,8 @@ export interface ElectronAPI {
     // Collection operations
     getCollections: () => Promise<Collection[]>;
     createCollection: (name: string) => Promise<Collection>;
+    renameCollection: (id: number, newName: string) => Promise<void>;
+    deleteCollection: (id: number) => Promise<void>;
     addWatchedFolder: (path: string) => Promise<Collection>;
     removeWatchedFolder: (id: number) => Promise<void>;
 

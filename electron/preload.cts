@@ -9,6 +9,8 @@ const electronAPI: ElectronAPI = {
     searchModels: (query) => ipcRenderer.invoke('search-models', query),
     importFiles: () => ipcRenderer.invoke('import-files'),
     deleteFile: (id) => ipcRenderer.invoke('delete-file', id),
+    addModelToCollection: (modelId, collectionId) => ipcRenderer.invoke('add-model-to-collection', modelId, collectionId),
+    removeModelFromCollection: (modelId, collectionId) => ipcRenderer.invoke('remove-model-from-collection', modelId, collectionId),
 
     // Tag operations
     getTags: () => ipcRenderer.invoke('get-tags'),
@@ -19,6 +21,8 @@ const electronAPI: ElectronAPI = {
     // Collection operations
     getCollections: () => ipcRenderer.invoke('get-collections'),
     createCollection: (name) => ipcRenderer.invoke('create-collection', name),
+    renameCollection: (id, newName) => ipcRenderer.invoke('rename-collection', id, newName),
+    deleteCollection: (id) => ipcRenderer.invoke('delete-collection', id),
     addWatchedFolder: (path) => ipcRenderer.invoke('add-watched-folder', path),
     removeWatchedFolder: (id) => ipcRenderer.invoke('remove-watched-folder', id),
 
@@ -32,6 +36,8 @@ const electronAPI: ElectronAPI = {
     calculateWastedSpace: () => ipcRenderer.invoke('calculate-wasted-space'),
     updateModelMetadata: (modelId, metadata) => ipcRenderer.invoke('update-model-metadata', modelId, metadata),
     readFileAsBuffer: (filepath) => ipcRenderer.invoke('read-file-as-buffer', filepath),
+    captureThumbnail: (modelId, imageData) => ipcRenderer.invoke('capture-thumbnail', modelId, imageData),
+    refreshWatchedFolders: () => ipcRenderer.invoke('refresh-watched-folders'),
 
     // Events
     onModelsUpdated: (callback) => {
