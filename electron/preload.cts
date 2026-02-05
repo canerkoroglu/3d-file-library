@@ -30,6 +30,8 @@ const electronAPI: ElectronAPI = {
     openFolder: (path) => ipcRenderer.invoke('open-folder', path),
     findDuplicates: () => ipcRenderer.invoke('find-duplicates'),
     calculateWastedSpace: () => ipcRenderer.invoke('calculate-wasted-space'),
+    updateModelMetadata: (modelId, metadata) => ipcRenderer.invoke('update-model-metadata', modelId, metadata),
+    readFileAsBuffer: (filepath) => ipcRenderer.invoke('read-file-as-buffer', filepath),
 
     // Events
     onModelsUpdated: (callback) => {

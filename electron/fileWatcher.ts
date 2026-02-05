@@ -30,7 +30,7 @@ export function startWatchingFolder(folderId: number, folderPath: string, mainWi
     const watcher = chokidar.watch(folderPath, {
         ignored: /(^|[\/\\])\../, // ignore dotfiles
         persistent: true,
-        ignoreInitial: true, // Don't process existing files on startup
+        ignoreInitial: false, // Process existing files on startup
         depth: 99, // Watch subdirectories recursively
         awaitWriteFinish: {
             stabilityThreshold: 2000, // Wait for file to be stable for 2s
@@ -50,6 +50,7 @@ export function startWatchingFolder(folderId: number, folderPath: string, mainWi
         const ext = path.extname(filePath).toLowerCase();
 
         if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+            console.log(`Ignored file (unsupported extension): ${filePath}`);
             return;
         }
 
@@ -193,6 +194,79 @@ export function initializeWatchers(mainWindow: BrowserWindow | null): void {
             console.warn(`Watched folder does not exist: ${collection.folder_path}`);
         }
     }
+}
+
+/**
+ * Sync logic:
+ * 1. Scan directory recursively for all supported files
+ * 2. Get all DB records for this collection
+ * 3. Add missing files (on disk but not in DB)
+ * 4. Remove orphan files (in DB but not on disk)
+ */
+export async function syncFolder(folderId: number, folderPath: string): Promise<void> {
+    console.log(`[Sync] Starting full sync for folder ${folderId}: ${folderPath}`);
+    const db = getDatabase();
+
+    // 1. Get all files on disk
+    const diskFiles = new Set<string>();
+
+    function scanDir(dir: string) {
+        if (!fs.existsSync(dir)) return;
+        const items = fs.readdirSync(dir);
+
+        for (const item of items) {
+            const itemPath = path.join(dir, item);
+            if (item.startsWith('.')) continue; // Skip dotfiles
+
+            const stat = fs.statSync(itemPath);
+            if (stat.isDirectory()) {
+                scanDir(itemPath); // Recurse
+            } else if (stat.isFile()) {
+                const ext = path.extname(item).toLowerCase();
+                if (SUPPORTED_EXTENSIONS.includes(ext)) {
+                    diskFiles.add(itemPath);
+                }
+            }
+        }
+    }
+
+    try {
+        scanDir(folderPath);
+    } catch (e) {
+        console.error(`[Sync] Failed to scan directory ${folderPath}:`, e);
+        return;
+    }
+
+    console.log(`[Sync] Found ${diskFiles.size} model files on disk provided by ${folderPath}`);
+
+    // 2. Get all DB files for this collection
+    const dbFiles = db.prepare('SELECT id, filepath FROM models WHERE collection_id = ?').all(folderId) as Array<{ id: number; filepath: string }>;
+    const dbFileMap = new Map<string, number>();
+    dbFiles.forEach(f => dbFileMap.set(f.filepath, f.id));
+
+    console.log(`[Sync] Found ${dbFiles.length} models in database for collection ${folderId}`);
+
+    // 3. Find files to add (on disk but not in DB)
+    let addedCount = 0;
+    for (const diskFile of diskFiles) {
+        if (!dbFileMap.has(diskFile)) {
+            console.log(`[Sync] Found missing file in DB: ${diskFile}, importing...`);
+            await importFile(diskFile, folderId);
+            addedCount++;
+        }
+    }
+
+    // 4. Find files to remove (in DB but not on disk)
+    let removedCount = 0;
+    for (const [dbPath, _id] of dbFileMap) {
+        if (!diskFiles.has(dbPath)) {
+            console.log(`[Sync] Found orphan file in DB: ${dbPath}, removing...`);
+            await removeFile(dbPath);
+            removedCount++;
+        }
+    }
+
+    console.log(`[Sync] Completed sync for folder ${folderId}. Added: ${addedCount}, Removed: ${removedCount}`);
 }
 
 /**

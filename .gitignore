@@ -35,3 +35,6 @@ Thumbs.db
 *.dmg
 *.exe
 *.AppImage
+
+# Custom
+build_*.txt

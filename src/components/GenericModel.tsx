@@ -1,5 +1,4 @@
 import { useRef, useEffect, useState } from 'react';
-import { useLoader } from '@react-three/fiber';
 import { STLLoader } from 'three-stdlib';
 import { ThreeMFLoader } from 'three-stdlib';
 import { OBJLoader } from 'three-stdlib';
@@ -12,96 +11,124 @@ interface GenericModelProps {
 
 export default function GenericModel({ filepath, fileType }: GenericModelProps) {
     const meshRef = useRef<THREE.Group>(null);
-    const [url, setUrl] = useState<string | null>(null);
+    const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
+    const [object, setObject] = useState<THREE.Object3D | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
-    // Create a local URL for the file to handle Electron file protocol
+    // Load file via IPC and parse manually
     useEffect(() => {
-        // In Electron, we can use the file:// protocol directly, 
-        // but depending on security settings/context we might need to handle it.
-        // For now, assuming the filepath is absolute and accessible.
-        // If needed, we could read the file in main process and pass a blob URL.
-        const fileUrl = `file://${filepath}`;
-        setUrl(fileUrl);
+        let cancelled = false;
+
+        const loadFile = async () => {
+            try {
+                console.log('Loading file via IPC:', filepath);
+
+                // Check if electronAPI is available
+                if (!window.electronAPI || !window.electronAPI.readFileAsBuffer) {
+                    console.error('electronAPI.readFileAsBuffer not available');
+                    setError('File loading API not available');
+                    return;
+                }
+
+                const arrayBuffer = await window.electronAPI.readFileAsBuffer(filepath);
+
+                if (cancelled) return;
+
+                // Parse the file data based on type
+                if (fileType === 'stl') {
+                    const loader = new STLLoader();
+                    const geom = loader.parse(arrayBuffer);
+                    if (!cancelled) {
+                        setGeometry(geom);
+                        setObject(null);
+                    }
+                } else if (fileType === '3mf') {
+                    const loader = new ThreeMFLoader();
+                    // ThreeMFLoader expects a string path, not ArrayBuffer
+                    // We need to create a blob URL for this
+                    const blob = new Blob([arrayBuffer], { type: 'model/3mf' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    const obj = await loader.loadAsync(blobUrl);
+                    URL.revokeObjectURL(blobUrl);
+                    if (!cancelled) {
+                        setObject(obj);
+                        setGeometry(null);
+                    }
+                } else if (fileType === 'obj') {
+                    const loader = new OBJLoader();
+                    const text = new TextDecoder().decode(arrayBuffer);
+                    const obj = loader.parse(text);
+                    if (!cancelled) {
+                        setObject(obj);
+                        setGeometry(null);
+                    }
+                }
+
+                console.log('Successfully loaded model:', filepath);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error('Failed to load file:', filepath, error);
+                    setError('Failed to load model');
+                }
+            }
+        };
+
+        loadFile();
 
         return () => {
-            // Cleanup if we used createObjectURL
+            cancelled = true;
         };
-    }, [filepath]);
-
-    if (!url) return null;
-
-    return (
-        <group dispose={null}>
-            <ModelLoader url={url} fileType={fileType} meshRef={meshRef} />
-        </group>
-    );
-}
-
-function ModelLoader({ url, fileType, meshRef }: { url: string, fileType: string, meshRef: React.RefObject<THREE.Group | null> }) {
-
-    // Select loader based on file type
-    let geometry: THREE.BufferGeometry | undefined;
-    let object: THREE.Object3D | undefined;
-
-    try {
-        if (fileType === 'stl') {
-            geometry = useLoader(STLLoader, url);
-        } else if (fileType === '3mf') {
-            object = useLoader(ThreeMFLoader, url);
-        } else if (fileType === 'obj') {
-            object = useLoader(OBJLoader, url);
-        }
-    } catch (error) {
-        console.error(`Failed to load model: ${url}`, error);
-        return null;
-    }
+    }, [filepath, fileType]);
 
     // Center and scale logic
     useEffect(() => {
-        const target = object || (meshRef.current?.children[0] as THREE.Mesh);
+        if (!meshRef.current) return;
 
-        if (target) {
-            // If it's a geometry (STL)
-            if (geometry) {
-                geometry.computeBoundingBox();
-                geometry.center();
+        if (geometry) {
+            geometry.computeBoundingBox();
+            geometry.center();
+            geometry.computeBoundingBox(); // Recompute after centering
 
-                // Auto-scale
-                if (geometry.boundingBox) {
-                    const size = new THREE.Vector3();
-                    geometry.boundingBox.getSize(size);
-                    const maxDim = Math.max(size.x, size.y, size.z);
-
-                    if (maxDim > 20 || maxDim < 0.1) {
-                        const scale = 5 / maxDim;
-                        if (meshRef.current) {
-                            meshRef.current.scale.set(scale, scale, scale);
-                        }
-                    }
-                }
+            // Move to floor (y=0)
+            if (geometry.boundingBox) {
+                geometry.translate(0, -geometry.boundingBox.min.y, 0);
             }
-            // If it's an object (3MF/OBJ)
-            else if (object) {
-                const box = new THREE.Box3().setFromObject(object);
+
+            // Auto-scale
+            if (geometry.boundingBox) {
                 const size = new THREE.Vector3();
-                box.getSize(size);
-                const center = new THREE.Vector3();
-                box.getCenter(center);
-
-                // Center the object
-                object.position.x += (object.position.x - center.x);
-                object.position.y += (object.position.y - center.y);
-                object.position.z += (object.position.z - center.z);
-
-                // Auto-scale
+                geometry.boundingBox.getSize(size);
                 const maxDim = Math.max(size.x, size.y, size.z);
+
                 if (maxDim > 20 || maxDim < 0.1) {
                     const scale = 5 / maxDim;
-                    object.scale.set(scale, scale, scale);
+                    meshRef.current.scale.set(scale, scale, scale);
                 }
+            }
+        } else if (object) {
+            const box = new THREE.Box3().setFromObject(object);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+
+            // Center X and Z, but align bottom to Y=0
+            object.position.x += (object.position.x - center.x);
+            object.position.y += (object.position.y - box.min.y);
+            object.position.z += (object.position.z - center.z);
+
+            // Auto-scale
+            const maxDim = Math.max(size.x, size.y, size.z);
+            if (maxDim > 20 || maxDim < 0.1) {
+                const scale = 5 / maxDim;
+                object.scale.set(scale, scale, scale);
             }
         }
     }, [geometry, object]);
+
+    if (error) {
+        return null;
+    }
 
     if (fileType === 'stl' && geometry) {
         return (

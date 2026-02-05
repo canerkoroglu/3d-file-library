@@ -1,8 +1,7 @@
-import { app } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
-
 
 const THUMBNAIL_SIZE = 512;
 const THUMBNAIL_DIR = path.join(app.getPath('userData'), 'thumbnails');
@@ -12,14 +11,25 @@ if (!fs.existsSync(THUMBNAIL_DIR)) {
     fs.mkdirSync(THUMBNAIL_DIR, { recursive: true });
 }
 
+let mainWindow: BrowserWindow | null = null;
+
+/**
+ * Set the main window reference for thumbnail generation
+ */
+export function setMainWindow(window: BrowserWindow): void {
+    mainWindow = window;
+}
+
 /**
  * Generate a thumbnail for a 3D model file
+ * Uses the renderer process to create a 3D render
  */
 export async function generateThumbnail(
     filepath: string,
     modelId: number
 ): Promise<string> {
     const ext = path.extname(filepath).toLowerCase();
+    const thumbnailPath = path.join(THUMBNAIL_DIR, `${modelId}.png`);
 
     // For 3MF files, try to extract embedded thumbnail first
     if (ext === '.3mf') {
@@ -29,9 +39,64 @@ export async function generateThumbnail(
         }
     }
 
-    // For now, create a simple placeholder thumbnail
-    // TODO: Implement full 3D rendering when electron-gl or similar is set up
+    // Try to generate 3D rendered thumbnail
+    try {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            await generate3DThumbnail(filepath, ext.replace('.', ''), thumbnailPath);
+            return thumbnailPath;
+        }
+    } catch (error) {
+        console.error('Failed to generate 3D thumbnail:', error);
+    }
+
+    // Fallback to placeholder
     return await createPlaceholderThumbnail(modelId, ext);
+}
+
+/**
+ * Generate 3D rendered thumbnail using the renderer process
+ */
+async function generate3DThumbnail(
+    filepath: string,
+    fileType: string,
+    outputPath: string
+): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (!mainWindow) {
+            reject(new Error('Main window not available'));
+            return;
+        }
+
+        const timeout = setTimeout(() => {
+            reject(new Error('Thumbnail generation timeout'));
+        }, 10000);
+
+        // Listen for the thumbnail data
+        const handleThumbnail = (_event: any, data: { success: boolean; imageData?: string; error?: string }) => {
+            clearTimeout(timeout);
+
+            if (data.success && data.imageData) {
+                // Convert base64 to buffer and save
+                const buffer = Buffer.from(data.imageData, 'base64');
+                sharp(buffer)
+                    .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+                        fit: 'contain',
+                        background: { r: 35, g: 35, b: 35, alpha: 1 }
+                    })
+                    .png()
+                    .toFile(outputPath)
+                    .then(() => resolve())
+                    .catch(reject);
+            } else {
+                reject(new Error(data.error || 'Unknown error'));
+            }
+        };
+
+        mainWindow.webContents.once('thumbnail-generated', handleThumbnail);
+
+        // Request thumbnail generation from renderer
+        mainWindow.webContents.send('generate-thumbnail', { filepath, fileType });
+    });
 }
 
 /**
@@ -76,7 +141,6 @@ async function extractEmbeddedThumbnail(
 
 /**
  * Create a simple placeholder thumbnail
- * In the future, this can be replaced with actual 3D rendering
  */
 async function createPlaceholderThumbnail(
     modelId: number,

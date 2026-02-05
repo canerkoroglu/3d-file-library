@@ -61,7 +61,7 @@ export default function FilterBar() {
                         setSortOrder(newSortOrder);
                         setTimeout(() => loadModels(), 100);
                     }}
-                    className="input h-9 text-sm px-3 cursor-pointer"
+                    className="input h-9 text-sm px-3 cursor-pointer w-40"
                 >
                     <option value="created-desc">Newest First</option>
                     <option value="created-asc">Oldest First</option>

@@ -1,12 +1,13 @@
-import { Suspense } from 'react';
+import { Suspense, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, PerspectiveCamera, Environment } from '@react-three/drei';
-import { X, Tag as TagIcon, ExternalLink, Folder, Loader2 } from 'lucide-react';
+import { X, Tag as TagIcon, ExternalLink, Folder, Camera } from 'lucide-react';
 import { useStore } from '../store/store';
 import GenericModel from './GenericModel';
 
 export default function ModelViewer() {
     const { selectedModel, closeViewer, tags, addTagToModel, removeTagFromModel } = useStore();
+    const canvasRef = useRef<HTMLCanvasElement>(null);
 
     if (!selectedModel) return null;
 
@@ -22,6 +23,48 @@ export default function ModelViewer() {
             await removeTagFromModel(selectedModel.id, tagId);
         } else {
             await addTagToModel(selectedModel.id, tagId);
+        }
+    };
+
+    const handleCaptureThumbnail = async () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        try {
+            // Wait for next frame to ensure scene is fully rendered
+            await new Promise(resolve => requestAnimationFrame(() => {
+                requestAnimationFrame(resolve);
+            }));
+
+            // Convert canvas to blob
+            canvas.toBlob(async (blob) => {
+                if (!blob) return;
+
+                // Convert blob to base64
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64data = reader.result as string;
+                    const base64Image = base64data.split(',')[1]; // Remove data:image/png;base64, prefix
+
+                    // Send to main process to save
+                    console.log('Sending thumbnail to main process for model:', selectedModel.id);
+                    await window.electronAPI.captureThumbnail(selectedModel.id, base64Image);
+                    console.log('Thumbnail saved, reloading models...');
+
+                    // Reload models to show updated thumbnail
+                    const { loadModels, closeViewer } = useStore.getState();
+                    await loadModels();
+
+                    // Close viewer to force grid refresh
+                    closeViewer();
+
+                    // Show success feedback
+                    console.log('Thumbnail captured and updated successfully! Models reloaded.');
+                };
+                reader.readAsDataURL(blob);
+            }, 'image/png');
+        } catch (error) {
+            console.error('Failed to capture thumbnail:', error);
         }
     };
 
@@ -54,7 +97,11 @@ export default function ModelViewer() {
                 <div className="flex-1 flex overflow-hidden min-h-0">
                     {/* 3D Viewer */}
                     <div className="flex-1 bg-[#1a1a1a] relative min-w-0">
-                        <Canvas shadows>
+                        <Canvas
+                            shadows
+                            ref={canvasRef as any}
+                            gl={{ preserveDrawingBuffer: true }}
+                        >
                             <PerspectiveCamera makeDefault position={[0, 0, 5]} fov={50} />
                             <OrbitControls
                                 enableDamping
@@ -104,13 +151,15 @@ export default function ModelViewer() {
                             </Suspense>
                         </Canvas>
 
-                        {/* Loading overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <div className="flex flex-col items-center gap-3 glass px-6 py-4 rounded-xl shadow-2xl">
-                                <Loader2 size={24} className="spinner w-6 h-6" />
-                                <div className="text-white text-sm font-medium">Loading 3D model...</div>
-                            </div>
-                        </div>
+                        {/* Capture Thumbnail Button */}
+                        <button
+                            onClick={handleCaptureThumbnail}
+                            className="absolute top-4 right-4 glass px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors flex items-center gap-2"
+                            title="Capture current view as thumbnail"
+                        >
+                            <Camera size={18} />
+                            Capture Thumbnail
+                        </button>
 
                         {/* Controls hint */}
                         <div className="absolute bottom-4 left-4 glass px-4 py-2 rounded-lg text-xs text-white/90 pointer-events-none">

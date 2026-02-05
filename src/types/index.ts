@@ -88,6 +88,9 @@ export interface ElectronAPI {
     findDuplicates: () => Promise<DuplicateGroup[]>;
     calculateWastedSpace: () => Promise<{ totalWasted: number; groupCount: number }>;
     updateModelMetadata: (modelId: number, metadata: Record<string, any>) => Promise<void>;
+    readFileAsBuffer: (filepath: string) => Promise<ArrayBuffer>;
+    captureThumbnail: (modelId: number, imageData: string) => Promise<void>;
+    refreshWatchedFolders: () => Promise<void>;
 
     // Events
     onModelsUpdated: (callback: () => void) => void;

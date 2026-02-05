@@ -1,36 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles/globals.css'
-
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
-    constructor(props: { children: React.ReactNode }) {
-        super(props);
-        this.state = { hasError: false, error: null };
-    }
-
-    static getDerivedStateFromError(error: Error) {
-        return { hasError: true, error };
-    }
-
-    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-        console.error("Uncaught error:", error, errorInfo);
-    }
-
-    render() {
-        if (this.state.hasError) {
-            return (
-                <div style={{ padding: 20, color: 'white', backgroundColor: '#990000', height: '100vh' }}>
-                    <h1>Application Error</h1>
-                    <pre>{this.state.error?.toString()}</pre>
-                    <button onClick={() => window.location.reload()}>Reload</button>
-                </div>
-            );
-        }
-
-        return this.props.children;
-    }
-}
 
 try {
     const rootElement = document.getElementById('root');
@@ -46,5 +18,8 @@ try {
     console.log("React app mounted successfully");
 } catch (error) {
     console.error("Failed to mount React app:", error);
-    document.body.innerHTML = `<div style="color:red; padding:20px;">Failed to start app: ${error}</div>`;
+    document.body.innerHTML = `<div style="color:red; padding:20px; background:#1a1a1a; height:100vh; color:white;">
+        <h1>Fatal Startup Error</h1>
+        <pre>${error}</pre>
+    </div>`;
 }

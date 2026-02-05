@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Box, Share2, Files } from 'lucide-react';
 import type { ModelWithTags } from '../types';
 import { useStore } from '../store/store';
@@ -10,6 +11,12 @@ interface ModelCardProps {
 export default function ModelCard({ model, viewMode }: ModelCardProps) {
     const { openViewer, selectedModels, toggleModelSelection } = useStore();
     const isSelected = selectedModels.has(model.id);
+    const [imgError, setImgError] = useState(false);
+
+    const handleImageError = () => {
+        console.error(`Failed to load thumbnail for ${model.filename} at path: ${model.thumbnailPath}`);
+        setImgError(true);
+    };
 
     const formatFileSize = (bytes: number): string => {
         if (bytes < 1024) return bytes + ' B';
@@ -33,11 +40,12 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
                 className="model-card p-4 flex items-center gap-4 hover:border-[#3b82f6]"
             >
                 <div className="w-14 h-14 bg-[#232323] rounded-lg flex items-center justify-center flex-shrink-0">
-                    {model.thumbnailPath ? (
+                    {model.thumbnailPath && !imgError ? (
                         <img
-                            src={`file://${model.thumbnailPath}`}
+                            src={`media:///${model.thumbnailPath ? model.thumbnailPath.replace(/\\/g, '/') : ''}`}
                             alt={model.filename}
                             className="w-full h-full object-cover rounded-lg"
+                            onError={handleImageError}
                         />
                     ) : (
                         getFileIcon()
@@ -62,11 +70,14 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
         >
             {/* Thumbnail */}
             <div className="thumbnail relative">
-                {model.thumbnailPath ? (
+                {model.thumbnailPath && !imgError ? (
                     <img
-                        src={`file://${model.thumbnailPath}`}
+                        key={`${model.id}-${model.createdAt}`}
+                        src={`media:///${model.thumbnailPath ? model.thumbnailPath.replace(/\\/g, '/') : ''}?t=${new Date(model.createdAt).getTime()}`}
                         alt={model.filename}
                         className="w-full h-full object-cover"
+                        onError={handleImageError}
+                        onLoad={() => console.log(`Thumbnail loaded for ${model.filename}, key: ${model.id}-${model.createdAt}, path: ${model.thumbnailPath}`)}
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">

@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, Plus, Settings, Inbox, Copy } from 'lucide-react';
+import { Folder, FolderOpen, Plus, Settings, Inbox, Copy, X, RefreshCw } from 'lucide-react';
 import { useStore } from '../store/store';
 
 export default function Sidebar() {
@@ -18,6 +18,34 @@ export default function Sidebar() {
             if (error?.message !== 'No folder selected') {
                 console.error('Failed to add watched folder:', error);
             }
+        }
+    };
+
+    const handleRefreshFolders = async () => {
+        try {
+            await window.electronAPI.refreshWatchedFolders();
+        } catch (error) {
+            console.error('Failed to refresh folders:', error);
+        }
+    };
+
+    const handleRemoveWatchedFolder = async (folderId: number, e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent selecting the folder when clicking delete
+        try {
+            await window.electronAPI.removeWatchedFolder(folderId);
+
+            // Force reload of models to clear them from view
+            await useStore.getState().loadModels();
+
+            // Reload collections
+            const newCollections = await window.electronAPI.getCollections();
+            useStore.getState().setCollections(newCollections);
+            // If we deleted the selected folder, reset selection
+            if (selectedCollection === folderId) {
+                setSelectedCollection(null);
+            }
+        } catch (error) {
+            console.error('Failed to remove watched folder:', error);
         }
     };
 
@@ -57,13 +85,22 @@ export default function Sidebar() {
                         <h3 className="text-[10px] font-bold text-[#808080] uppercase tracking-wider">
                             Watched Folders
                         </h3>
-                        <button
-                            onClick={handleAddWatchedFolder}
-                            className="p-1.5 hover:bg-[#353535] rounded-md transition-colors group"
-                            title="Add folder to watch"
-                        >
-                            <Plus size={14} className="text-[#808080] group-hover:text-white transition-colors" />
-                        </button>
+                        <div className="flex gap-1">
+                            <button
+                                onClick={handleRefreshFolders}
+                                className="p-1.5 hover:bg-[#353535] rounded-md transition-colors group"
+                                title="Refresh all watched folders"
+                            >
+                                <RefreshCw size={14} className="text-[#808080] group-hover:text-white transition-colors" />
+                            </button>
+                            <button
+                                onClick={handleAddWatchedFolder}
+                                className="p-1.5 hover:bg-[#353535] rounded-md transition-colors group"
+                                title="Add folder to watch"
+                            >
+                                <Plus size={14} className="text-[#808080] group-hover:text-white transition-colors" />
+                            </button>
+                        </div>
                     </div>
                     <div className="space-y-0.5">
                         {watchedFolders.length === 0 ? (
@@ -72,18 +109,22 @@ export default function Sidebar() {
                             </div>
                         ) : (
                             watchedFolders.map((folder) => (
-                                <button
+                                <div
                                     key={folder.id}
                                     onClick={() => setSelectedCollection(folder.id)}
-                                    className={`sidebar-item w-full ${selectedCollection === folder.id ? 'active' : 'inactive'}`}
+                                    className={`sidebar-item w-full group cursor-pointer ${selectedCollection === folder.id ? 'active' : 'inactive'}`}
                                     title={folder.folderPath}
                                 >
                                     <FolderOpen size={18} />
                                     <span className="truncate flex-1 text-left">{folder.name}</span>
-                                    <span className="text-[10px] text-[#606060]">
-                                        {/* Could show file count here */}
-                                    </span>
-                                </button>
+                                    <button
+                                        onClick={(e) => handleRemoveWatchedFolder(folder.id, e)}
+                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+                                        title="Remove watched folder"
+                                    >
+                                        <X size={14} className="text-red-400" />
+                                    </button>
+                                </div>
                             ))
                         )}
                     </div>
