@@ -231,7 +231,7 @@ export default function ModelViewer() {
                                                                 className="w-4 h-4 rounded border-gray-600 bg-[#2d2d2d] text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 accent-blue-500"
                                                                 onChange={async (e) => {
                                                                     const checked = e.target.checked;
-                                                                    console.log(`Toggling collection ${c.name} (ID: ${c.id}) to ${checked}`);
+                                                                    // console.log(`Toggling collection ${c.name} (ID: ${c.id}) to ${checked}`);
 
                                                                     // Optimistic UI update could be added here, but for now we rely on store refresh
                                                                     try {
@@ -341,11 +341,43 @@ export default function ModelViewer() {
 
                         {/* Actions - Fixed at bottom */}
                         <div className="p-4 border-t border-[#404040] space-y-2 flex-shrink-0 bg-[#2d2d2d]">
-                            <button className="btn btn-primary w-full">
+                            <button
+                                onClick={async () => {
+                                    if (!selectedModel) return;
+                                    try {
+                                        // TODO: Add slicer selection if multiple slicers found
+                                        // For now, let's try to get slicers and use the first one, or handle generic open
+                                        const slicers = await window.electronAPI.getSlicers();
+                                        if (slicers && slicers.length > 0) {
+                                            await window.electronAPI.openInSlicer(selectedModel.filepath, slicers[0].id);
+                                        } else {
+                                            console.warn('No slicers configured or found');
+                                            // Fallback to opening folder? or show alert?
+                                            // alert('No slicers found. Please configure a slicer in settings.');
+
+                                            // Fallback: Open with default system app
+                                            await window.electronAPI.openInSlicer(selectedModel.filepath, 'default');
+                                        }
+                                    } catch (err) {
+                                        console.error('Failed to open in slicer:', err);
+                                    }
+                                }}
+                                className="btn btn-primary w-full"
+                            >
                                 <ExternalLink size={16} />
                                 Open in Slicer
                             </button>
-                            <button className="btn btn-secondary w-full">
+                            <button
+                                onClick={async () => {
+                                    if (!selectedModel) return;
+                                    try {
+                                        await window.electronAPI.openFolder(selectedModel.filepath);
+                                    } catch (err) {
+                                        console.error('Failed to open folder:', err);
+                                    }
+                                }}
+                                className="btn btn-secondary w-full"
+                            >
                                 <Folder size={16} />
                                 Show in Folder
                             </button>

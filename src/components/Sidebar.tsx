@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Folder, FolderOpen, Plus, Settings, Inbox, Copy, X, RefreshCw, Edit2 } from 'lucide-react';
 import { useStore } from '../store/store';
+import { ConfirmDialog } from './ConfirmDialog';
 
 export default function Sidebar() {
     const { collections, selectedCollection, setSelectedCollection, openDuplicatesModal, openSettings } = useStore();
@@ -11,6 +12,23 @@ export default function Sidebar() {
     const [isCreatingCollection, setIsCreatingCollection] = useState(false);
     const [newCollectionName, setNewCollectionName] = useState('');
     const [editingCollection, setEditingCollection] = useState<{ id: number, name: string } | null>(null);
+
+    // Confirmation Dialog State
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        action: () => Promise<void>;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        action: async () => { }
+    });
+
+    const closeConfirmDialog = () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+    };
 
     const handleCreateCollection = async () => {
         if (!newCollectionName.trim()) return;
@@ -45,16 +63,23 @@ export default function Sidebar() {
 
     const handleDeleteCollection = async (id: number, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm('Are you sure you want to delete this collection? Models inside will not be deleted.')) return;
 
-        try {
-            await window.electronAPI.deleteCollection(id);
-            const newCollections = await window.electronAPI.getCollections();
-            useStore.getState().setCollections(newCollections);
-            if (selectedCollection === id) setSelectedCollection(null);
-        } catch (error) {
-            console.error('Failed to delete collection:', error);
-        }
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Delete Collection',
+            message: 'Are you sure you want to delete this collection? Models inside will not be deleted.',
+            action: async () => {
+                try {
+                    await window.electronAPI.deleteCollection(id);
+                    const newCollections = await window.electronAPI.getCollections();
+                    useStore.getState().setCollections(newCollections);
+                    if (selectedCollection === id) setSelectedCollection(null);
+                } catch (error) {
+                    console.error('Failed to delete collection:', error);
+                }
+                closeConfirmDialog();
+            }
+        });
     };
 
     const handleAddWatchedFolder = async () => {
@@ -81,26 +106,42 @@ export default function Sidebar() {
 
     const handleRemoveWatchedFolder = async (folderId: number, e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent selecting the folder when clicking delete
-        try {
-            await window.electronAPI.removeWatchedFolder(folderId);
 
-            // Force reload of models to clear them from view
-            await useStore.getState().loadModels();
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Remove Watch Folder',
+            message: 'Are you sure you want to stop watching this folder? The models will be removed from the library, but the original files on your computer will remain.',
+            action: async () => {
+                try {
+                    await window.electronAPI.removeWatchedFolder(folderId);
 
-            // Reload collections
-            const newCollections = await window.electronAPI.getCollections();
-            useStore.getState().setCollections(newCollections);
-            // If we deleted the selected folder, reset selection
-            if (selectedCollection === folderId) {
-                setSelectedCollection(null);
+                    // Force reload of models to clear them from view
+                    await useStore.getState().loadModels();
+
+                    // Reload collections
+                    const newCollections = await window.electronAPI.getCollections();
+                    useStore.getState().setCollections(newCollections);
+                    // If we deleted the selected folder, reset selection
+                    if (selectedCollection === folderId) {
+                        setSelectedCollection(null);
+                    }
+                } catch (error) {
+                    console.error('Failed to remove watched folder:', error);
+                }
+                closeConfirmDialog();
             }
-        } catch (error) {
-            console.error('Failed to remove watched folder:', error);
-        }
+        });
     };
 
     return (
         <div className="w-60 bg-[#2d2d2d] border-r border-[#404040] flex flex-col flex-shrink-0">
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                onConfirm={confirmDialog.action}
+                onCancel={closeConfirmDialog}
+            />
             {/* Collections section */}
             <div className="flex-1 overflow-y-auto p-3 space-y-6">
                 {/* All Models / Inbox */}

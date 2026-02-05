@@ -26,7 +26,7 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
     // ============ File Reading for 3D Models ============
 
     handle<ArrayBuffer>('read-file-as-buffer', async (_event, filepath: string) => {
-        console.log('Reading file as buffer:', filepath);
+        // console.log('Reading file as buffer:', filepath);
         const buffer = await fs.promises.readFile(filepath);
         return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
     });
@@ -136,7 +136,7 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
         const models = getModelsFromDb(filters);
         // Log the first model to see if thumbnail info is correct
         if (models.length > 0) {
-            console.log(`[IPC] Returning ${models.length} models. First model: ${models[0].filename}, thumb: ${models[0].thumbnailPath}, created: ${models[0].createdAt}`);
+            // console.log(`[IPC] Returning ${models.length} models. First model: ${models[0].filename}, thumb: ${models[0].thumbnailPath}, created: ${models[0].createdAt}`);
         }
         return models;
     });
@@ -215,7 +215,7 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
                 // Generate thumbnail asynchronously
                 generateThumbnail(filepath, modelId).then(thumbnailPath => {
                     updateThumbnail.run(thumbnailPath, modelId);
-                    console.log(`Thumbnail generated for ${filename}`);
+                    // console.log(`Thumbnail generated for ${filename}`);
                 }).catch(err => {
                     console.error(`Failed to generate thumbnail for ${filename}:`, err);
                 });
@@ -358,12 +358,12 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
     handle('add-model-to-collection', async (_event, modelId: number, collectionId: number): Promise<void> => {
         // Insert if not exists
         db.prepare('INSERT OR IGNORE INTO model_collections (model_id, collection_id) VALUES (?, ?)').run(modelId, collectionId);
-        console.log(`[IPC] Added model ${modelId} to collection ${collectionId}`);
+        // console.log(`[IPC] Added model ${modelId} to collection ${collectionId}`);
     });
 
     handle('remove-model-from-collection', async (_event, modelId: number, collectionId: number): Promise<void> => {
         db.prepare('DELETE FROM model_collections WHERE model_id = ? AND collection_id = ?').run(modelId, collectionId);
-        console.log(`[IPC] Removed model ${modelId} from collection ${collectionId}`);
+        // console.log(`[IPC] Removed model ${modelId} from collection ${collectionId}`);
     });
 
     handle('refresh-watched-folders', async (): Promise<void> => {
@@ -425,14 +425,17 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
     });
 
     handle('open-in-slicer', async (_event, modelPath: string, slicerId: string) => {
-        // TODO: Implement open in slicer
         console.log('Open in slicer:', modelPath, slicerId);
+        // For now, just open with the default associated application
+        // In the future, we can try to spawn specific slicer executables with the file path
+        await shell.openPath(modelPath);
     });
 
     // ============ Utility Operations ============
 
-    handle('open-folder', async (_event, folderPath: string): Promise<void> => {
-        await shell.openPath(folderPath);
+    handle('open-folder', async (_event, filePath: string): Promise<void> => {
+        // showItemInFolder highlights the file in Explorer/Finder
+        shell.showItemInFolder(filePath);
     });
 
     handle('find-duplicates', async () => {

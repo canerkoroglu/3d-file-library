@@ -21,7 +21,7 @@ export default function GenericModel({ filepath, fileType }: GenericModelProps) 
 
         const loadFile = async () => {
             try {
-                console.log('Loading file via IPC:', filepath);
+                // console.log('Loading file via IPC:', filepath);
 
                 // Check if electronAPI is available
                 if (!window.electronAPI || !window.electronAPI.readFileAsBuffer) {
@@ -64,7 +64,7 @@ export default function GenericModel({ filepath, fileType }: GenericModelProps) 
                     }
                 }
 
-                console.log('Successfully loaded model:', filepath);
+                // console.log('Successfully loaded model:', filepath);
             } catch (error) {
                 if (!cancelled) {
                     console.error('Failed to load file:', filepath, error);

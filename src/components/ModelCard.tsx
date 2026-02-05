@@ -76,7 +76,7 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
                         alt={model.filename}
                         className="w-full h-full object-cover"
                         onError={handleImageError}
-                        onLoad={() => console.log(`Thumbnail loaded for ${model.filename}, key: ${model.id}-${model.createdAt}, path: ${model.thumbnailPath}`)}
+                    // onLoad={() => console.log(`Thumbnail loaded for ${model.filename}`)}
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">

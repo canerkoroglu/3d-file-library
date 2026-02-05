@@ -24,7 +24,7 @@ export function startWatchingFolder(folderId: number, folderPath: string, mainWi
         return;
     }
 
-    console.log(`Starting to watch folder ${folderId}: ${folderPath}`);
+    // console.log(`Starting to watch folder ${folderId}: ${folderPath}`);
 
     // Create watcher with chokidar
     const watcher = chokidar.watch(folderPath, {
@@ -54,7 +54,7 @@ export function startWatchingFolder(folderId: number, folderPath: string, mainWi
             return;
         }
 
-        console.log(`New file detected: ${filePath}`);
+        // console.log(`New file detected: ${filePath}`);
 
         try {
             await importFile(filePath, folderId);
@@ -70,7 +70,7 @@ export function startWatchingFolder(folderId: number, folderPath: string, mainWi
 
     // Handle file deletions
     watcher.on('unlink', async (filePath: string) => {
-        console.log(`File removed: ${filePath}`);
+        // console.log(`File removed: ${filePath}`);
 
         try {
             await removeFile(filePath);
