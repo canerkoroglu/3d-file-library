@@ -134,7 +134,7 @@ export default function Sidebar() {
     };
 
     return (
-        <div className="w-60 bg-[#2d2d2d] border-r border-[#404040] flex flex-col flex-shrink-0">
+        <div className="w-60 bg-primary-card border-r border-accent-gray flex flex-col flex-shrink-0">
             <ConfirmDialog
                 isOpen={confirmDialog.isOpen}
                 title={confirmDialog.title}
@@ -147,15 +147,15 @@ export default function Sidebar() {
                 {/* All Models / Inbox */}
                 <div>
                     <div className="flex items-center justify-between mb-2 px-3">
-                        <h3 className="text-[10px] font-bold text-[#808080] uppercase tracking-wider">
+                        <h3 className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">
                             Collections
                         </h3>
                         <button
                             onClick={() => setIsCreatingCollection(true)}
-                            className="p-1.5 hover:bg-[#353535] rounded-md transition-colors group"
+                            className="p-1.5 hover:bg-primary-hover rounded-md transition-colors group"
                             title="Create Collection"
                         >
-                            <Plus size={14} className="text-[#808080] group-hover:text-white transition-colors" />
+                            <Plus size={14} className="text-text-secondary group-hover:text-text-primary transition-colors" />
                         </button>
                     </div>
 
@@ -190,7 +190,7 @@ export default function Sidebar() {
                                         }
                                     }}
                                     placeholder="Collection name..."
-                                    className="w-full bg-[#1a1a1a] text-white text-sm px-2 py-1.5 rounded border border-[#3b82f6] focus:outline-none"
+                                    className="w-full bg-primary-bg text-text-primary text-sm px-2 py-1.5 rounded border border-accent-blue focus:outline-none"
                                 />
                             </div>
                         )}
@@ -214,7 +214,7 @@ export default function Sidebar() {
                                             if (e.key === 'Escape') setEditingCollection(null);
                                         }}
                                         onBlur={() => handleRenameCollection(collection.id, editingCollection.name)}
-                                        className="flex-1 bg-[#1a1a1a] text-white text-sm px-1 rounded border border-[#3b82f6] focus:outline-none min-w-0"
+                                        className="flex-1 bg-primary-bg text-text-primary text-sm px-1 rounded border border-accent-blue focus:outline-none min-w-0"
                                     />
                                 ) : (
                                     <>
@@ -230,17 +230,17 @@ export default function Sidebar() {
                                                     e.stopPropagation();
                                                     setEditingCollection({ id: collection.id, name: collection.name });
                                                 }}
-                                                className="p-1 hover:bg-[#353535] rounded-md transition-colors"
+                                                className="p-1 hover:bg-primary-hover rounded-md transition-colors"
                                                 title="Rename"
                                             >
-                                                <Edit2 size={12} className="text-[#808080] hover:text-white" />
+                                                <Edit2 size={12} className="text-text-secondary hover:text-text-primary" />
                                             </button>
                                             <button
                                                 onClick={(e) => handleDeleteCollection(collection.id, e)}
                                                 className="p-1 hover:bg-red-500/20 rounded-md transition-colors"
                                                 title="Delete"
                                             >
-                                                <X size={12} className="text-[#808080] hover:text-red-400" />
+                                                <X size={12} className="text-text-secondary hover:text-red-400" />
                                             </button>
                                         </div>
                                     </>
@@ -253,29 +253,29 @@ export default function Sidebar() {
                 {/* Watched folders section */}
                 <div>
                     <div className="flex items-center justify-between mb-2 px-3">
-                        <h3 className="text-[10px] font-bold text-[#808080] uppercase tracking-wider">
+                        <h3 className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">
                             Watched Folders
                         </h3>
                         <div className="flex gap-1">
                             <button
                                 onClick={handleRefreshFolders}
-                                className="p-1.5 hover:bg-[#353535] rounded-md transition-colors group"
+                                className="p-1.5 hover:bg-primary-hover rounded-md transition-colors group"
                                 title="Refresh all watched folders"
                             >
-                                <RefreshCw size={14} className="text-[#808080] group-hover:text-white transition-colors" />
+                                <RefreshCw size={14} className="text-text-secondary group-hover:text-text-primary transition-colors" />
                             </button>
                             <button
                                 onClick={handleAddWatchedFolder}
-                                className="p-1.5 hover:bg-[#353535] rounded-md transition-colors group"
+                                className="p-1.5 hover:bg-primary-hover rounded-md transition-colors group"
                                 title="Add folder to watch"
                             >
-                                <Plus size={14} className="text-[#808080] group-hover:text-white transition-colors" />
+                                <Plus size={14} className="text-text-secondary group-hover:text-text-primary transition-colors" />
                             </button>
                         </div>
                     </div>
                     <div className="space-y-0.5">
                         {watchedFolders.length === 0 ? (
-                            <div className="text-xs text-[#606060] px-3 py-3 text-center italic">
+                            <div className="text-xs text-text-secondary px-3 py-3 text-center italic">
                                 No watched folders
                             </div>
                         ) : (
@@ -303,8 +303,8 @@ export default function Sidebar() {
             </div>
 
             {/* Tools section */}
-            <div className="p-3 border-t border-[#404040] flex-shrink-0 space-y-1">
-                <h3 className="text-[10px] font-bold text-[#808080] uppercase tracking-wider mb-2 px-3">
+            <div className="p-3 border-t border-accent-gray flex-shrink-0 space-y-1">
+                <h3 className="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-2 px-3">
                     Tools
                 </h3>
                 <button
@@ -317,10 +317,10 @@ export default function Sidebar() {
             </div>
 
             {/* Bottom section - Settings */}
-            <div className="p-3 border-t border-[#404040] flex-shrink-0">
+            <div className="p-3 border-t border-accent-gray flex-shrink-0">
                 <button
                     onClick={openSettings}
-                    className="sidebar-item w-full hover:bg-[#353535] hover:text-white transition-colors"
+                    className="sidebar-item w-full hover:bg-primary-hover hover:text-text-primary transition-colors"
                 >
                     <Settings size={18} />
                     <span>Settings & Tools</span>

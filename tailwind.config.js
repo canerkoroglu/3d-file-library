@@ -4,21 +4,24 @@ export default {
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
     ],
+    darkMode: 'class',
     theme: {
         extend: {
             colors: {
                 primary: {
-                    bg: '#1a1a1a',
-                    card: '#2d2d2d',
-                    hover: '#353535',
+                    bg: 'var(--color-primary-bg)',
+                    card: 'var(--color-primary-card)',
+                    hover: 'var(--color-primary-hover)',
                 },
                 accent: {
-                    blue: '#3b82f6',
-                    gray: '#404040',
+                    blue: 'var(--color-accent-blue)',
+                    gray: 'var(--color-accent-gray)',
+                    hover: 'var(--color-accent-hover)',
                 },
                 text: {
-                    primary: '#ffffff',
-                    secondary: '#a0a0a0',
+                    primary: 'var(--color-text-primary)',
+                    secondary: 'var(--color-text-secondary)',
+                    inverse: 'var(--color-text-inverse)',
                 },
                 tag: {
                     draft: '#fbbf24',

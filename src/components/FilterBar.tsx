@@ -25,14 +25,14 @@ export default function FilterBar() {
     };
 
     return (
-        <div className="bg-[#2d2d2d] border-b border-[#404040] px-4 py-3 space-y-3 flex-shrink-0">
+        <div className="bg-primary-card border-b border-accent-gray px-4 py-3 space-y-3 flex-shrink-0">
             {/* Top row: Search and actions */}
             <div className="flex items-center gap-3">
                 {/* Search */}
                 <div className="flex-1 relative">
                     <Search
                         size={16}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-[#808080] pointer-events-none"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none"
                     />
                     <input
                         type="text"
@@ -67,12 +67,12 @@ export default function FilterBar() {
                 </select>
 
                 {/* View mode toggle */}
-                <div className="flex items-center bg-[#1a1a1a] rounded-lg p-1 border border-[#404040]">
+                <div className="flex items-center bg-primary-bg rounded-lg p-1 border border-accent-gray">
                     <button
                         onClick={() => setViewMode('grid')}
                         className={`p-1.5 rounded transition-all duration-200 ${viewMode === 'grid'
-                            ? 'bg-[#3b82f6] text-white shadow-sm'
-                            : 'text-[#808080] hover:text-white hover:bg-[#353535]'
+                            ? 'bg-accent-blue text-white shadow-sm'
+                            : 'text-text-secondary hover:text-text-primary hover:bg-primary-hover'
                             }`}
                         title="Grid view"
                     >
@@ -81,8 +81,8 @@ export default function FilterBar() {
                     <button
                         onClick={() => setViewMode('list')}
                         className={`p-1.5 rounded transition-all duration-200 ${viewMode === 'list'
-                            ? 'bg-[#3b82f6] text-white shadow-sm'
-                            : 'text-[#808080] hover:text-white hover:bg-[#353535]'
+                            ? 'bg-accent-blue text-white shadow-sm'
+                            : 'text-text-secondary hover:text-text-primary hover:bg-primary-hover'
                             }`}
                         title="List view"
                     >
@@ -94,7 +94,7 @@ export default function FilterBar() {
             {/* Tag filters */}
             {tags.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] text-[#808080] font-bold uppercase tracking-wider flex-shrink-0">
+                    <span className="text-[10px] text-text-secondary font-bold uppercase tracking-wider flex-shrink-0">
                         Filter:
                     </span>
                     {tags.map((tag) => {

@@ -68,6 +68,7 @@ export interface ElectronAPI {
     deleteFile: (id: number) => Promise<void>;
     addModelToCollection: (modelId: number, collectionId: number) => Promise<void>;
     removeModelFromCollection: (modelId: number, collectionId: number) => Promise<void>;
+    renameModelFile: (id: number, newName: string) => Promise<void>;
 
     // Tag operations
     getTags: () => Promise<Tag[]>;

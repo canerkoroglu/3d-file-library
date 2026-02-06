@@ -19,6 +19,17 @@ function App() {
     } = useStore();
 
     useEffect(() => {
+        // Sync theme to DOM immediately
+        const { theme } = useStore.getState();
+        const root = window.document.documentElement;
+        root.classList.remove('light', 'dark');
+        if (theme === 'system') {
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            root.classList.add(systemTheme);
+        } else {
+            root.classList.add(theme);
+        }
+
         // Load initial data safely
         const initApp = async () => {
             try {
@@ -47,11 +58,11 @@ function App() {
     }, [loadModels, loadTags, loadCollections]);
 
     return (
-        <div className="h-screen w-screen flex flex-col bg-[#1a1a1a] overflow-hidden text-white">
+        <div className="h-screen w-screen flex flex-col bg-primary-bg overflow-hidden text-text-primary transition-colors duration-200">
             {/* Title bar - macOS style with centered title */}
-            <div className="h-12 bg-[#2d2d2d] border-b border-[#404040] flex items-center justify-center px-20 flex-shrink-0 relative" style={{ WebkitAppRegion: 'drag' } as any}>
+            <div className="h-12 bg-primary-card border-b border-accent-gray flex items-center justify-center px-20 flex-shrink-0 relative" style={{ WebkitAppRegion: 'drag' } as any}>
                 {/* Centered title */}
-                <span className="text-sm font-medium text-[#e0e0e0] tracking-wide">Modelist</span>
+                <span className="text-sm font-medium text-text-primary tracking-wide">Modelist</span>
 
                 {/* API status badge - positioned absolutely on the right */}
                 {!window.electronAPI && (

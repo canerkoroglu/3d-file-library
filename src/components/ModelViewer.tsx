@@ -1,6 +1,6 @@
-import { Suspense, useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Grid, PerspectiveCamera, Environment } from '@react-three/drei';
+import { OrbitControls, Grid, Stage } from '@react-three/drei';
 import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus } from 'lucide-react';
 import { useStore } from '../store/store';
 import GenericModel from './GenericModel';
@@ -8,6 +8,28 @@ import GenericModel from './GenericModel';
 export default function ModelViewer() {
     const { selectedModel, closeViewer, tags, addTagToModel, removeTagFromModel } = useStore();
     const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    // Renaming state
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState('');
+
+    // Reset rename state when model changes
+    useEffect(() => {
+        setIsRenaming(false);
+        setRenameValue('');
+    }, [selectedModel?.id]);
+
+    const handleRename = async () => {
+        if (!selectedModel || !renameValue.trim()) return;
+
+        try {
+            await window.electronAPI.renameModelFile(selectedModel.id, renameValue);
+            setIsRenaming(false);
+        } catch (error) {
+            console.error('Failed to rename file:', error);
+            // alert('Failed to rename file. Check console for details.');
+        }
+    };
 
     if (!selectedModel) return null;
 
@@ -97,18 +119,20 @@ export default function ModelViewer() {
                 if (e.target === e.currentTarget) closeViewer();
             }}
         >
-            <div className="bg-[#2d2d2d] rounded-xl w-full h-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden border border-[#505050] shadow-2xl">
+            <div className="bg-primary-card rounded-xl w-full h-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden border border-accent-gray shadow-2xl">
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-[#404040] flex-shrink-0 bg-[#2d2d2d]">
+                <div className="flex items-center justify-between p-4 border-b border-accent-gray flex-shrink-0 bg-primary-card">
                     <div className="flex-1 min-w-0">
-                        <h2 className="text-lg font-semibold truncate">{selectedModel.displayName || selectedModel.filename}</h2>
-                        <p className="text-sm text-[#808080] mt-0.5">
+                        <div className="group flex items-start justify-between gap-2">
+                            <h2 className="text-lg font-semibold truncate">{selectedModel.displayName || selectedModel.filename}</h2>
+                        </div>
+                        <p className="text-sm text-text-secondary mt-0.5">
                             {formatFileSize(selectedModel.fileSize)} • {selectedModel.fileType.toUpperCase()}
                         </p>
                     </div>
                     <button
                         onClick={closeViewer}
-                        className="ml-4 p-2 hover:bg-[#353535] rounded-lg transition-colors flex-shrink-0"
+                        className="ml-4 p-2 hover:bg-primary-hover rounded-lg transition-colors flex-shrink-0"
                         title="Close (Esc)"
                     >
                         <X size={20} />
@@ -118,59 +142,46 @@ export default function ModelViewer() {
                 {/* Content */}
                 <div className="flex-1 flex overflow-hidden min-h-0">
                     {/* 3D Viewer */}
-                    <div className="flex-1 bg-[#1a1a1a] relative min-w-0">
+                    <div className="flex-1 bg-primary-bg relative min-w-0">
                         <Canvas
                             shadows
-                            ref={canvasRef as any}
+                            camera={{ position: [0, 0, 5], fov: 50 }}
                             gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
                         >
-                            <PerspectiveCamera makeDefault position={[0, 0, 5]} fov={50} />
+                            <Stage environment="city" intensity={0.6} adjustCamera={false}>
+                                {/* Grid */}
+                                <Grid
+                                    args={[20, 20]}
+                                    cellSize={0.5}
+                                    cellThickness={0.6}
+                                    cellColor="#404040"
+                                    sectionSize={2}
+                                    sectionThickness={1}
+                                    sectionColor="#505050"
+                                    fadeDistance={30}
+                                    fadeStrength={1}
+                                    followCamera={false}
+                                    position={[0, -0.01, 0]}
+                                />
+
+                                {/* 3D Model */}
+                                {selectedModel && (
+                                    <GenericModel
+                                        key={selectedModel.id} // Re-mount when model changes
+                                        filepath={selectedModel.filepath}
+                                        fileType={selectedModel.fileType}
+                                    />
+                                )}
+                            </Stage>
                             <OrbitControls
                                 enableDamping
                                 dampingFactor={0.05}
                                 minDistance={1}
                                 maxDistance={20}
                                 makeDefault
+                                autoRotate
+                                autoRotateSpeed={0.5}
                             />
-
-                            {/* Lighting */}
-                            <ambientLight intensity={0.4} />
-                            <directionalLight
-                                position={[10, 10, 5]}
-                                intensity={0.8}
-                                castShadow
-                                shadow-mapSize={[1024, 1024]}
-                            />
-                            <directionalLight position={[-10, -10, -5]} intensity={0.3} />
-                            <spotLight position={[0, 10, 0]} intensity={0.3} angle={0.6} penumbra={1} />
-
-                            {/* Environment for better reflections */}
-                            <Environment preset="city" />
-
-                            {/* Grid */}
-                            <Grid
-                                args={[20, 20]}
-                                cellSize={0.5}
-                                cellThickness={0.6}
-                                cellColor="#404040"
-                                sectionSize={2}
-                                sectionThickness={1}
-                                sectionColor="#505050"
-                                fadeDistance={30}
-                                fadeStrength={1}
-                                followCamera={false}
-                                position={[0, -0.01, 0]}
-                            />
-
-                            {/* 3D Model */}
-                            <Suspense fallback={null}>
-                                {selectedModel && (
-                                    <GenericModel
-                                        filepath={selectedModel.filepath}
-                                        fileType={selectedModel.fileType}
-                                    />
-                                )}
-                            </Suspense>
                         </Canvas>
 
                         {/* Capture Thumbnail Button */}
@@ -182,53 +193,67 @@ export default function ModelViewer() {
                             <Camera size={18} />
                             Capture Thumbnail
                         </button>
-
-                        {/* Controls hint */}
-                        <div className="absolute bottom-4 left-4 glass px-4 py-2 rounded-lg text-xs text-white/90 pointer-events-none">
-                            <div className="font-semibold mb-1">Controls:</div>
-                            <div>Left click + drag: Rotate</div>
-                            <div>Right click + drag: Pan</div>
-                            <div>Scroll: Zoom</div>
-                        </div>
                     </div>
 
                     {/* Side panel */}
-                    <div className="w-80 bg-[#2d2d2d] border-l border-[#404040] flex flex-col overflow-hidden flex-shrink-0">
+                    <div className="w-80 bg-primary-card border-l border-accent-gray flex flex-col overflow-hidden flex-shrink-0">
                         <div className="flex-1 overflow-y-auto p-4 space-y-6">
                             {/* Model info */}
                             <div>
-                                <h3 className="text-sm font-semibold mb-3 text-white">Model Information</h3>
+                                <h3 className="text-sm font-semibold mb-3 text-text-primary">Model Information</h3>
                                 <div className="space-y-3 text-sm">
                                     {/* ... existing info fields ... */}
                                     <div>
-                                        <div className="text-[#808080] text-xs mb-1">Filename</div>
-                                        <div className="text-white break-all bg-[#1a1a1a] px-3 py-2 rounded-lg">{selectedModel.filename}</div>
+                                        <div className="text-text-secondary text-xs mb-1">Filename</div>
+                                        <input
+                                            className="w-full bg-primary-bg text-text-primary px-3 py-2 rounded-lg border border-transparent focus:border-blue-500 focus:outline-none transition-colors"
+                                            value={isRenaming ? renameValue : selectedModel.filename}
+                                            onChange={(e) => {
+                                                setIsRenaming(true);
+                                                setRenameValue(e.target.value);
+                                            }}
+                                            onBlur={() => {
+                                                if (isRenaming) {
+                                                    handleRename();
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.currentTarget.blur(); // Triggers onBlur
+                                                }
+                                                if (e.key === 'Escape') {
+                                                    setIsRenaming(false);
+                                                    setRenameValue('');
+                                                }
+                                            }}
+                                            title="Click to rename"
+                                        />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <div className="text-[#808080] text-xs mb-1">Size</div>
-                                            <div className="text-white bg-[#1a1a1a] px-3 py-2 rounded-lg">{formatFileSize(selectedModel.fileSize)}</div>
+                                            <div className="text-text-secondary text-xs mb-1">Size</div>
+                                            <div className="text-text-primary bg-primary-bg px-3 py-2 rounded-lg">{formatFileSize(selectedModel.fileSize)}</div>
                                         </div>
                                         <div>
-                                            <div className="text-[#808080] text-xs mb-1">Type</div>
-                                            <div className="text-white bg-[#1a1a1a] px-3 py-2 rounded-lg uppercase">{selectedModel.fileType}</div>
+                                            <div className="text-text-secondary text-xs mb-1">Type</div>
+                                            <div className="text-text-primary bg-primary-bg px-3 py-2 rounded-lg uppercase">{selectedModel.fileType}</div>
                                         </div>
                                     </div>
 
                                     {/* Collection Assignment */}
                                     <div>
-                                        <div className="text-[#808080] text-xs mb-2">Collections</div>
-                                        <div className="bg-[#1a1a1a] rounded-lg border border-[#404040] p-2 max-h-40 overflow-y-auto space-y-1">
+                                        <div className="text-text-secondary text-xs mb-2">Collections</div>
+                                        <div className="bg-primary-bg rounded-lg border border-accent-gray p-2 max-h-40 overflow-y-auto space-y-1">
                                             {useStore.getState().collections
                                                 .filter(c => c.type === 'collection')
                                                 .map(c => {
                                                     const isChecked = selectedModel.collectionIds?.includes(c.id);
                                                     return (
-                                                        <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-[#252525] rounded cursor-pointer group select-none">
+                                                        <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-primary-hover rounded cursor-pointer group select-none">
                                                             <input
                                                                 type="checkbox"
                                                                 checked={isChecked || false}
-                                                                className="w-4 h-4 rounded border-gray-600 bg-[#2d2d2d] text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 accent-blue-500"
+                                                                className="w-4 h-4 rounded border-gray-600 bg-primary-card text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 accent-blue-500"
                                                                 onChange={async (e) => {
                                                                     const checked = e.target.checked;
                                                                     // console.log(`Toggling collection ${c.name} (ID: ${c.id}) to ${checked}`);
@@ -248,13 +273,13 @@ export default function ModelViewer() {
                                                                     }
                                                                 }}
                                                             />
-                                                            <span className="text-white text-sm">{c.name}</span>
+                                                            <span className="text-text-primary text-sm">{c.name}</span>
                                                         </label>
                                                     );
                                                 })
                                             }
                                             {useStore.getState().collections.filter(c => c.type === 'collection').length === 0 && (
-                                                <div className="text-[#606060] text-xs text-center py-2 italic">
+                                                <div className="text-text-secondary text-xs text-center py-2 italic">
                                                     No collections created yet.
                                                 </div>
                                             )}
@@ -262,8 +287,8 @@ export default function ModelViewer() {
                                     </div>
 
                                     <div>
-                                        <div className="text-[#808080] text-xs mb-1">Location</div>
-                                        <div className="text-white text-xs break-all bg-[#1a1a1a] px-3 py-2 rounded-lg font-mono">
+                                        <div className="text-text-secondary text-xs mb-1">Location</div>
+                                        <div className="text-text-primary text-xs break-all bg-primary-bg px-3 py-2 rounded-lg font-mono">
                                             {selectedModel.filepath}
                                         </div>
                                     </div>
@@ -272,7 +297,7 @@ export default function ModelViewer() {
 
                             {/* Tags */}
                             <div>
-                                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-white">
+                                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-text-primary">
                                     <TagIcon size={16} />
                                     Tags
                                 </h3>
@@ -299,12 +324,12 @@ export default function ModelViewer() {
                                     {!isCreatingTag ? (
                                         <button
                                             onClick={() => setIsCreatingTag(true)}
-                                            className="tag bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors border border-dashed border-white/20"
+                                            className="tag bg-white/10 hover:bg-white/20 text-text-secondary hover:text-text-primary transition-colors border border-dashed border-white/20"
                                         >
                                             + New Tag
                                         </button>
                                     ) : (
-                                        <div className="flex items-center gap-2 bg-[#1a1a1a] p-1 rounded border border-[#3b82f6]">
+                                        <div className="flex items-center gap-2 bg-primary-bg p-1 rounded border border-accent-blue">
                                             <input
                                                 autoFocus
                                                 type="text"
@@ -318,7 +343,7 @@ export default function ModelViewer() {
                                                     }
                                                 }}
                                                 placeholder="Tag name..."
-                                                className="bg-transparent text-white text-xs w-20 focus:outline-none"
+                                                className="bg-transparent text-text-primary text-xs w-20 focus:outline-none"
                                             />
                                             <input
                                                 type="color"
@@ -329,7 +354,7 @@ export default function ModelViewer() {
                                             />
                                             <button
                                                 onClick={handleCreateTag}
-                                                className="text-[#3b82f6] hover:text-white transition-colors"
+                                                className="text-accent-blue hover:text-text-primary transition-colors"
                                             >
                                                 <Plus size={12} />
                                             </button>
@@ -340,7 +365,7 @@ export default function ModelViewer() {
                         </div>
 
                         {/* Actions - Fixed at bottom */}
-                        <div className="p-4 border-t border-[#404040] space-y-2 flex-shrink-0 bg-[#2d2d2d]">
+                        <div className="p-4 border-t border-accent-gray space-y-2 flex-shrink-0 bg-primary-card">
                             <button
                                 onClick={async () => {
                                     if (!selectedModel) return;

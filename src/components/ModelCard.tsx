@@ -26,9 +26,9 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
     const getFileIcon = () => {
         switch (model.fileType) {
             case '3mf':
-                return <Files size={48} className="text-[#606060]" strokeWidth={1.5} />;
+                return <Files size={48} className="text-text-secondary" strokeWidth={1.5} />;
             default:
-                return <Box size={48} className="text-[#606060]" strokeWidth={1.5} />;
+                return <Box size={48} className="text-text-secondary" strokeWidth={1.5} />;
         }
     };
 
@@ -36,9 +36,9 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
         return (
             <button
                 onClick={() => openViewer(model)}
-                className="model-card p-4 flex items-center gap-4 hover:border-[#3b82f6]"
+                className="model-card p-4 flex items-center gap-4 hover:border-accent-blue"
             >
-                <div className="w-14 h-14 bg-[#232323] rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-14 h-14 bg-primary-bg rounded-lg flex items-center justify-center flex-shrink-0">
                     {model.thumbnailPath && !imgError ? (
                         <img
                             src={`media:///${model.thumbnailPath ? model.thumbnailPath.replace(/\\/g, '/') : ''}`}
@@ -52,9 +52,9 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
                 </div>
                 <div className="flex-1 min-w-0 text-left">
                     <div className="font-medium text-sm truncate">{model.displayName || model.filename}</div>
-                    <div className="text-xs text-[#808080] truncate mt-0.5">{model.filepath}</div>
+                    <div className="text-xs text-text-secondary truncate mt-0.5">{model.filepath}</div>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-[#808080] flex-shrink-0">
+                <div className="flex items-center gap-4 text-xs text-text-secondary flex-shrink-0">
                     <span>{formatFileSize(model.fileSize)}</span>
                     <span className="uppercase font-semibold">{model.fileType}</span>
                 </div>
@@ -116,10 +116,10 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
                 <div className="font-medium text-sm truncate mb-1.5 text-left">
                     {model.displayName || model.filename}
                 </div>
-                <div className="text-xs text-[#808080] flex items-center justify-between">
+                <div className="text-xs text-text-secondary flex items-center justify-between">
                     <span>{formatFileSize(model.fileSize)}</span>
                     {model.tags && model.tags.length > 1 && (
-                        <span className="text-[10px] bg-[#353535] px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] bg-primary-hover px-1.5 py-0.5 rounded">
                             +{model.tags.length - 1} tag{model.tags.length - 1 > 1 ? 's' : ''}
                         </span>
                     )}

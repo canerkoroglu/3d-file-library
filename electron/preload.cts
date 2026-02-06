@@ -11,6 +11,7 @@ const electronAPI: ElectronAPI = {
     deleteFile: (id) => ipcRenderer.invoke('delete-file', id),
     addModelToCollection: (modelId, collectionId) => ipcRenderer.invoke('add-model-to-collection', modelId, collectionId),
     removeModelFromCollection: (modelId, collectionId) => ipcRenderer.invoke('remove-model-from-collection', modelId, collectionId),
+    renameModelFile: (id, newName) => ipcRenderer.invoke('rename-model-file', id, newName),
 
     // Tag operations
     getTags: () => ipcRenderer.invoke('get-tags'),

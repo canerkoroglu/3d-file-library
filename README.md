@@ -1,6 +1,6 @@
 # Modelist STL Viewer
 
-A desktop application for organizing and viewing 3D printing files (STL, 3MF, OBJ). Inspired by [Modelist](https://modelist.app/).
+A desktop application for organizing and viewing 3D printing files (STL, 3MF, OBJ).
 
 ## Features
 
@@ -98,6 +98,4 @@ stl-viewer/
 
 MIT
 
-## Credits
 
-Inspired by [Modelist](https://modelist.app/) - the original 3D printing library organizer.

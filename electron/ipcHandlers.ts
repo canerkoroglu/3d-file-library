@@ -456,4 +456,40 @@ export const setupIpcHandlers = (ipcMain: IpcMain, mainWindow: BrowserWindow | n
             mainWindow.webContents.send('models-updated');
         }
     });
+
+    handle('rename-model-file', async (_event, modelId: number, newName: string): Promise<void> => {
+        const model = db.prepare('SELECT * FROM models WHERE id = ?').get(modelId) as Model;
+        if (!model) throw new Error('Model not found');
+
+        const oldPath = model.filepath;
+        if (!fs.existsSync(oldPath)) throw new Error('File not found on disk');
+
+        const dir = path.dirname(oldPath);
+        const ext = path.extname(oldPath);
+
+        let safeNewName = newName.trim();
+        // Basic sanitization for Windows filename validity
+        safeNewName = safeNewName.replace(/[<>:"/\\|?*]/g, '_');
+
+        // Append extension if missing
+        if (!safeNewName.toLowerCase().endsWith(ext.toLowerCase())) {
+            safeNewName += ext;
+        }
+
+        const newPath = path.join(dir, safeNewName);
+
+        if (fs.existsSync(newPath)) throw new Error('A file with that name already exists');
+
+        await fs.promises.rename(oldPath, newPath);
+
+        // Update DB
+        const now = new Date().toISOString();
+        db.prepare('UPDATE models SET filename = ?, filepath = ?, modified_at = ? WHERE id = ?')
+            .run(safeNewName, newPath, now, modelId);
+
+        // Notify renderer
+        if (mainWindow) {
+            mainWindow.webContents.send('models-updated');
+        }
+    });
 };

@@ -26,6 +26,10 @@ interface AppState {
     sortBy: 'name' | 'created' | 'modified' | 'size';
     sortOrder: 'asc' | 'desc';
 
+    // Theme
+    theme: 'dark' | 'light' | 'system';
+    setTheme: (theme: 'dark' | 'light' | 'system') => void;
+
     // Loading states
     isLoading: boolean;
 
@@ -91,6 +95,24 @@ export const useStore = create<AppState>((set, get) => ({
     // Sorting state
     sortBy: 'created',
     sortOrder: 'desc',
+
+    // Theme state
+    theme: (localStorage.getItem('theme') as 'dark' | 'light' | 'system') || 'system',
+    setTheme: (theme) => {
+        set({ theme });
+        localStorage.setItem('theme', theme);
+
+        // Apply theme immediately
+        const root = window.document.documentElement;
+        root.classList.remove('light', 'dark');
+
+        if (theme === 'system') {
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            root.classList.add(systemTheme);
+        } else {
+            root.classList.add(theme);
+        }
+    },
 
     // Sync actions
     // Sync actions
