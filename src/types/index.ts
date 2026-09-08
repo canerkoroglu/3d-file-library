@@ -102,10 +102,14 @@ export interface ModelPage {
 }
 
 export interface Slicer {
+    /** Stable id: a known slicer key, `custom:<n>` for user-added entries, or `system` for the OS default handler. */
     id: string;
     name: string;
+    /** App bundle, executable, binary or flatpak id. Empty for the system default. */
     path: string;
     detected: boolean;
+    isCustom: boolean;
+    isDefault: boolean;
 }
 
 export interface DuplicateGroup {
@@ -174,8 +178,13 @@ export interface ElectronAPI {
     refreshWatchedFolders: () => Promise<void>;
 
     // Slicer operations
-    getSlicers: () => Promise<Slicer[]>;
-    openInSlicer: (modelPath: string, slicerId: string) => Promise<void>;
+    getSlicers: (rescan?: boolean) => Promise<Slicer[]>;
+    setDefaultSlicer: (id: string | null) => Promise<void>;
+    /** Opens a file dialog to register a slicer the scan did not find. Resolves null when cancelled. */
+    addCustomSlicer: () => Promise<Slicer | null>;
+    removeCustomSlicer: (id: string) => Promise<void>;
+    /** Opens the file in the given slicer, or the default one when no id is passed. */
+    openInSlicer: (modelPath: string, slicerId?: string) => Promise<void>;
 
     // Utility operations
     openFolder: (path: string) => Promise<void>;

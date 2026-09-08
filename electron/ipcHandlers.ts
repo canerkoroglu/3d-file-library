@@ -21,6 +21,7 @@ import {
 import { isFolderWatched, startWatchingFolder, stopWatchingFolder, syncFolder } from './fileWatcher';
 import { dequeueModel, enqueueAll, enqueueModel, getProgress } from './indexer';
 import { cancelThumbnailRender, requestThumbnailRender, saveThumbnailFromBase64 } from './thumbnails';
+import { addCustomSlicer, listSlicers, openInSlicer, removeCustomSlicer, setDefaultSlicer } from './slicers';
 import type { Collection, FilterOptions, Model, SourceMetadata, Tag } from '../src/types';
 
 type Handler<T> = (event: IpcMainInvokeEvent, ...args: any[]) => Promise<T> | T;
@@ -239,12 +240,18 @@ export function setupIpcHandlers(): void {
 
     // ============ Slicers & shell ============
 
-    handle('get-slicers', () => []);
+    handle('get-slicers', (_event, rescan?: boolean) => listSlicers(Boolean(rescan)));
 
-    handle('open-in-slicer', async (_event, modelPath: string) => {
-        const known = db.prepare('SELECT 1 FROM models WHERE filepath = ?').get(modelPath);
-        if (!known) throw new Error('File is not part of the library');
-        await shell.openPath(modelPath);
+    handle('set-default-slicer', (_event, id: string | null) => setDefaultSlicer(id));
+
+    handle('add-custom-slicer', (event) => addCustomSlicer(windowFor(event)));
+
+    handle('remove-custom-slicer', (_event, id: string) => removeCustomSlicer(id));
+
+    handle('open-in-slicer', async (_event, modelPath: string, slicerId?: string) => {
+        const known = db.prepare('SELECT 1 FROM models WHERE filepath = ? AND missing_since IS NULL').get(modelPath);
+        if (!known) throw new Error('File is not part of the library or is missing');
+        await openInSlicer(modelPath, slicerId);
     });
 
     handle('open-folder', (_event, filePath: string) => {

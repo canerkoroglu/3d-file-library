@@ -1,10 +1,20 @@
 import { useState } from 'react';
-import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw, FileX } from 'lucide-react';
+import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw, FileX, ExternalLink, Plus, Trash2 } from 'lucide-react';
 import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
 export default function SettingsModal() {
-    const { closeSettings, theme, setTheme, indexProgress, libraryStats, loadModels } = useStore();
+    const { closeSettings, theme, setTheme, indexProgress, libraryStats, loadModels, slicers, loadSlicers, setDefaultSlicer, addCustomSlicer, removeCustomSlicer } = useStore();
+    const [rescanning, setRescanning] = useState(false);
+
+    const handleRescan = async () => {
+        setRescanning(true);
+        try {
+            await loadSlicers(true);
+        } finally {
+            setRescanning(false);
+        }
+    };
     const [regenerateThumbnails, setRegenerateThumbnails] = useState(false);
     const [rebuildRequested, setRebuildRequested] = useState(false);
     const [confirmForget, setConfirmForget] = useState(false);
@@ -105,6 +115,58 @@ export default function SettingsModal() {
                                 <RefreshCw size={14} className={rebuildRequested ? 'animate-spin' : ''} />
                                 {rebuildRequested ? 'Rebuilding…' : 'Rebuild search index'}
                             </button>
+                        </div>
+                    </section>
+
+                    <section className="space-y-4">
+                        <h3 className="text-sm font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+                            <ExternalLink size={14} /> Slicers
+                        </h3>
+                        <div className="bg-primary-bg rounded-lg border border-accent-gray p-4 space-y-3">
+                            <div className="text-sm text-text-secondary">
+                                Installed slicers are found automatically. Pick the one "Open in Slicer" should use, or add one the scan did not find.
+                            </div>
+                            <div className="divide-y divide-accent-gray border border-accent-gray rounded-lg overflow-hidden">
+                                {slicers.map((slicer) => (
+                                    <label key={slicer.id} className="flex items-center gap-3 px-3 py-2 hover:bg-primary-hover cursor-pointer select-none">
+                                        <input
+                                            type="radio"
+                                            name="default-slicer"
+                                            checked={slicer.isDefault}
+                                            onChange={() => setDefaultSlicer(slicer.id === 'system' ? null : slicer.id)}
+                                            className="accent-blue-500"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm text-text-primary flex items-center gap-2">
+                                                {slicer.name}
+                                                {slicer.isCustom && <span className="text-[10px] text-text-secondary uppercase">custom</span>}
+                                            </div>
+                                            {slicer.path && <div className="text-xs text-text-secondary truncate font-mono" title={slicer.path}>{slicer.path}</div>}
+                                        </div>
+                                        {slicer.isCustom && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    void removeCustomSlicer(slicer.id);
+                                                }}
+                                                className="p-1.5 rounded hover:bg-red-500/20 text-text-secondary hover:text-red-400"
+                                                title="Remove"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </label>
+                                ))}
+                                {slicers.length === 0 && <div className="px-3 py-3 text-sm text-text-secondary italic">Scanning…</div>}
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={handleRescan} disabled={rescanning} className="btn btn-secondary text-sm">
+                                    <RefreshCw size={14} className={rescanning ? 'animate-spin' : ''} /> Rescan
+                                </button>
+                                <button onClick={() => void addCustomSlicer()} className="btn btn-secondary text-sm">
+                                    <Plus size={14} /> Add slicer…
+                                </button>
+                            </div>
                         </div>
                     </section>
 

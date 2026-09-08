@@ -6,6 +6,7 @@ import type {
     IndexProgress,
     LibraryStats,
     ModelWithTags,
+    Slicer,
     SortBy,
     SortOrder,
     Tag,
@@ -66,6 +67,7 @@ interface AppState {
     isLoading: boolean;
     indexProgress: IndexProgress | null;
     libraryStats: LibraryStats | null;
+    slicers: Slicer[];
     theme: Theme;
 
     // Actions
@@ -104,6 +106,13 @@ interface AppState {
     removeTagFromModel: (modelId: number, tagId: number) => Promise<void>;
     checkForDuplicates: () => Promise<void>;
     deleteDuplicate: (modelId: number) => Promise<void>;
+
+    // Slicers
+    loadSlicers: (rescan?: boolean) => Promise<void>;
+    setDefaultSlicer: (id: string | null) => Promise<void>;
+    addCustomSlicer: () => Promise<void>;
+    removeCustomSlicer: (id: string) => Promise<void>;
+    openInSlicer: (modelPath: string, slicerId?: string) => Promise<string | null>;
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -143,6 +152,7 @@ export const useStore = create<AppState>((set, get) => ({
     isLoading: false,
     indexProgress: null,
     libraryStats: null,
+    slicers: [],
     theme: readStoredTheme(),
 
     setTheme: (theme) => {
@@ -371,6 +381,41 @@ export const useStore = create<AppState>((set, get) => ({
             await get().loadModels();
         } catch (error) {
             console.error('Failed to bulk delete:', error);
+        }
+    },
+
+    loadSlicers: async (rescan) => {
+        try {
+            set({ slicers: await window.electronAPI.getSlicers(rescan) });
+        } catch (error) {
+            console.error('Failed to load slicers:', error);
+        }
+    },
+
+    setDefaultSlicer: async (id) => {
+        await window.electronAPI.setDefaultSlicer(id);
+        await get().loadSlicers();
+    },
+
+    addCustomSlicer: async () => {
+        const added = await window.electronAPI.addCustomSlicer();
+        if (added) await get().loadSlicers();
+    },
+
+    removeCustomSlicer: async (id) => {
+        await window.electronAPI.removeCustomSlicer(id);
+        await get().loadSlicers();
+    },
+
+    /** Returns an error message on failure, null on success. */
+    openInSlicer: async (modelPath, slicerId) => {
+        try {
+            await window.electronAPI.openInSlicer(modelPath, slicerId);
+            return null;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error('Failed to open in slicer:', message);
+            return message.replace(/^Error invoking remote method '[^']+': Error: /, '');
         }
     },
 

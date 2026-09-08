@@ -33,7 +33,10 @@ const electronAPI: ElectronAPI = {
     refreshWatchedFolders: () => ipcRenderer.invoke('refresh-watched-folders'),
 
     // Slicers
-    getSlicers: () => ipcRenderer.invoke('get-slicers'),
+    getSlicers: (rescan) => ipcRenderer.invoke('get-slicers', rescan),
+    setDefaultSlicer: (id) => ipcRenderer.invoke('set-default-slicer', id),
+    addCustomSlicer: () => ipcRenderer.invoke('add-custom-slicer'),
+    removeCustomSlicer: (id) => ipcRenderer.invoke('remove-custom-slicer', id),
     openInSlicer: (modelPath, slicerId) => ipcRenderer.invoke('open-in-slicer', modelPath, slicerId),
 
     // Utilities

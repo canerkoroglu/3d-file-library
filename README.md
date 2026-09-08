@@ -12,6 +12,7 @@ A desktop library for 3D printing files (STL, 3MF, OBJ). Point it at the folders
 - **Organization**: many-to-many collections, colour-coded tags, source metadata (site, author, license, URL, notes).
 - **Duplicate finder**: exact duplicates are detected from stored content hashes without rescanning your disk.
 - **3D viewer**: orbit, zoom and pan with Z-up orientation matching your slicer.
+- **Slicer integration**: installed slicers (Bambu Studio, OrcaSlicer, PrusaSlicer, SuperSlicer, Cura, ideaMaker, Lychee, CHITUBOX and more) are detected on macOS, Windows and Linux. Pick a default in Settings or choose per model from the viewer; anything the scan misses can be added by hand.
 - **Cross-platform**: macOS, Windows and Linux builds.
 
 ## Search syntax
@@ -71,6 +72,8 @@ electron/
   library.ts           queries, FTS index maintenance, imports, duplicates
   fileWatcher.ts       chokidar watchers + folder reconciliation
   thumbnails.ts        render queue; the renderer draws 3D previews on request
+  slicers.ts           slicer discovery per platform and launching
+  settings.ts          key/value preferences stored in the database
   indexer/index.ts     job queue feeding the worker process
   indexer/worker.ts    utility process: hashing, mesh stats, sidecars, images
   analyzers/           STL / OBJ / 3MF parsers, sidecar discovery

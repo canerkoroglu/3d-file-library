@@ -168,6 +168,13 @@ const MIGRATIONS: Array<{ version: number; name: string; up: (db: Database.Datab
             db.exec('CREATE INDEX IF NOT EXISTS idx_models_missing_since ON models(missing_since)');
         },
     },
+    {
+        version: 4,
+        name: 'settings table',
+        up: (db) => {
+            db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+        },
+    },
 ];
 
 const DEFAULT_TAGS = [

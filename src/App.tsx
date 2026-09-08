@@ -9,7 +9,7 @@ import SettingsModal from './components/SettingsModal';
 import BulkActionsBar from './components/BulkActionsBar';
 
 function App() {
-    const { loadModels, loadTags, loadCollections, setIndexProgress, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen } = useStore();
+    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen } = useStore();
 
     useEffect(() => {
         const api = window.electronAPI;
@@ -20,6 +20,7 @@ function App() {
                 await Promise.all([loadTags(), loadCollections()]);
                 await loadModels();
                 setIndexProgress(await api.getIndexProgress());
+                void loadSlicers();
             } catch (error) {
                 console.error('Failed to initialize app data:', error);
             }
@@ -39,7 +40,7 @@ function App() {
             unsubscribeCollections();
             unsubscribeProgress();
         };
-    }, [loadModels, loadTags, loadCollections, setIndexProgress]);
+    }, [loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress]);
 
     return (
         <div className="h-screen w-screen flex flex-col bg-primary-bg overflow-hidden text-text-primary transition-colors duration-200">
