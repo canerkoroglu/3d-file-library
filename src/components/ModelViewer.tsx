@@ -18,7 +18,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function ModelViewer() {
-    const { selectedModel, closeViewer, tags, addTagToModel, removeTagFromModel, collections, loadModels, slicers, openInSlicer, openSettings } = useStore();
+    const { selectedModel, closeViewer, tags, addTagToModel, removeTagFromModel, collections, loadModels, slicers, openInSlicer, openSettings, reportError } = useStore();
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const [isRenaming, setIsRenaming] = useState(false);
@@ -90,7 +90,7 @@ export default function ModelViewer() {
             await window.electronAPI.renameModelFile(selectedModel.id, renameValue);
             setIsRenaming(false);
         } catch (error) {
-            console.error('Failed to rename file:', error);
+            reportError('Could not rename the file', error);
         }
     };
 
@@ -118,7 +118,7 @@ export default function ModelViewer() {
             setCaptureState('saved');
             setTimeout(() => setCaptureState('idle'), 1500);
         } catch (error) {
-            console.error('Failed to capture thumbnail:', error);
+            reportError('Could not save the thumbnail', error);
             setCaptureState('idle');
         }
     };
@@ -129,7 +129,7 @@ export default function ModelViewer() {
             else await window.electronAPI.removeModelFromCollection(selectedModel.id, collectionId);
             await loadModels();
         } catch (error) {
-            console.error('Failed to update collection:', error);
+            reportError('Could not update the collection', error);
         }
     };
 

@@ -8,7 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDatabase } from '../database';
 import { getThumbnailDir } from '../paths';
-import { applyAnalysis, markModelMissing, thumbnailStrengthOf } from '../library';
+import { applyAnalysis, markModelMissing, notifyUser, thumbnailStrengthOf } from '../library';
 import type { AnalysisJob, AnalysisResult, WorkerRequest, WorkerResponse } from '../analyzers/types';
 import type { FileType, IndexProgress } from '../../src/types';
 
@@ -40,6 +40,7 @@ const inflight = new Map<number, QueueEntry>();
 
 let completed = 0;
 let failed = 0;
+const failedNames: string[] = [];
 let progressTimer: NodeJS.Timeout | null = null;
 let lastProgressAt = 0;
 
@@ -155,9 +156,23 @@ function pump(): void {
     emitProgress();
     if (queue.length === 0 && inflight.size === 0) {
         emitProgress(true);
+        if (failed > 0) {
+            const examples = failedNames.slice(0, 3).join(', ');
+            notifyUser({
+                kind: 'warning',
+                title: `${failed} file${failed === 1 ? '' : 's'} could not be analysed`,
+                message: `${examples}${failed > 3 ? ', …' : ''}. They stay in the library without measurements; details are in the log.`,
+            });
+        }
         completed = 0;
         failed = 0;
+        failedNames.length = 0;
     }
+}
+
+function rememberFailure(modelId: number): void {
+    const row = getDatabase().prepare('SELECT filename FROM models WHERE id = ?').get(modelId) as { filename: string } | undefined;
+    if (row && failedNames.length < 3) failedNames.push(row.filename);
 }
 
 function handleResult(message: Extract<WorkerResponse, { type: 'result' }>): void {
@@ -172,10 +187,12 @@ function handleResult(message: Extract<WorkerResponse, { type: 'result' }>): voi
         } catch (error) {
             console.error(`[Indexer] Failed to apply analysis for model ${message.modelId}:`, error);
             failed++;
+            rememberFailure(message.modelId);
         }
     } else {
         console.error(`[Indexer] Analysis failed for model ${message.modelId}: ${message.error}`);
         failed++;
+        rememberFailure(message.modelId);
     }
 
     pump();

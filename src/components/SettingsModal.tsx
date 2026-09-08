@@ -4,7 +4,7 @@ import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
 export default function SettingsModal() {
-    const { closeSettings, theme, setTheme, indexProgress, libraryStats, loadModels, slicers, loadSlicers, setDefaultSlicer, addCustomSlicer, removeCustomSlicer, updateStatus, checkForUpdates, downloadUpdate, installUpdate } = useStore();
+    const { closeSettings, theme, setTheme, indexProgress, libraryStats, loadModels, slicers, loadSlicers, setDefaultSlicer, addCustomSlicer, removeCustomSlicer, updateStatus, checkForUpdates, downloadUpdate, installUpdate, reportError, pushToast } = useStore();
     const [rescanning, setRescanning] = useState(false);
     const [autoCheck, setAutoCheck] = useState<boolean | null>(null);
 
@@ -17,7 +17,7 @@ export default function SettingsModal() {
         try {
             await window.electronAPI.setAutoCheckUpdates(enabled);
         } catch (error) {
-            console.error('Failed to save update preference:', error);
+            reportError('Could not save the update preference', error);
         }
     };
 
@@ -56,7 +56,7 @@ export default function SettingsModal() {
             setForgetResult(removed);
             await loadModels();
         } catch (error) {
-            console.error('Failed to forget missing files:', error);
+            reportError('Could not forget the missing files', error);
         }
     };
 
@@ -64,8 +64,9 @@ export default function SettingsModal() {
         setRebuildRequested(true);
         try {
             await window.electronAPI.rebuildIndex({ regenerateThumbnails });
+            pushToast({ kind: 'info', title: 'Rebuilding the search index', message: 'Progress shows in the sidebar.' });
         } catch (error) {
-            console.error('Failed to rebuild index:', error);
+            reportError('Could not rebuild the index', error);
         } finally {
             setTimeout(() => setRebuildRequested(false), 2000);
         }

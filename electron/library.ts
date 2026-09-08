@@ -5,6 +5,7 @@ import { getDatabase } from './database';
 import { getThumbnailDir, isInsideDir } from './paths';
 import { buildFtsMatch, parseSearchQuery } from '../src/lib/searchQuery';
 import type {
+    AppNotice,
     DuplicateReport,
     FileType,
     FilterOptions,
@@ -30,11 +31,16 @@ export const THUMBNAIL_STRENGTH: Record<ThumbnailSource, number> = {
     folder: 1,
 };
 
-/** Emits 'models-updated' whenever library contents change. */
+/** Emits 'models-updated' whenever library contents change, and 'notice' for user-facing messages. */
 export const libraryEvents = new EventEmitter();
 
 export function notifyModelsUpdated(): void {
     libraryEvents.emit('models-updated');
+}
+
+/** Sends a short notification to the user (rendered as a toast). Use sparingly. */
+export function notifyUser(notice: AppNotice): void {
+    libraryEvents.emit('notice', notice);
 }
 
 export function fileTypeOf(filepath: string): FileType | null {

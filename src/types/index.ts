@@ -161,6 +161,13 @@ export interface UpdateStatus {
     manualInstall?: boolean;
 }
 
+/** A notification from the main process for the user (shown as a toast). */
+export interface AppNotice {
+    kind: 'info' | 'success' | 'warning' | 'error';
+    title: string;
+    message?: string;
+}
+
 export interface IndexProgress {
     queued: number;
     active: number;
@@ -260,6 +267,7 @@ export interface ElectronAPI {
 
     // Events (each returns an unsubscribe function)
     onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void;
+    onAppNotice: (callback: (notice: AppNotice) => void) => () => void;
     onModelsUpdated: (callback: () => void) => () => void;
     onCollectionsUpdated: (callback: () => void) => () => void;
     onIndexProgress: (callback: (progress: IndexProgress) => void) => () => void;

@@ -10,9 +10,23 @@ import SettingsModal from './components/SettingsModal';
 import BulkActionsBar from './components/BulkActionsBar';
 import ImportZipDialog from './components/ImportZipDialog';
 import UpdateBanner from './components/UpdateBanner';
+import ToastHost from './components/ToastHost';
+import { describeError } from './lib/errors';
 
 function App() {
-    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, setUpdateStatus, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip, selectAllModels, clearSelection } = useStore();
+    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, setUpdateStatus, pushToast, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip, selectAllModels, clearSelection } = useStore();
+
+    // Unexpected renderer failures become a toast instead of vanishing into the console.
+    useEffect(() => {
+        const onRejection = (e: PromiseRejectionEvent) => pushToast({ kind: 'error', title: 'Something went wrong', message: describeError(e.reason) });
+        const onError = (e: ErrorEvent) => pushToast({ kind: 'error', title: 'Something went wrong', message: describeError(e.error ?? e.message) });
+        window.addEventListener('unhandledrejection', onRejection);
+        window.addEventListener('error', onError);
+        return () => {
+            window.removeEventListener('unhandledrejection', onRejection);
+            window.removeEventListener('error', onError);
+        };
+    }, [pushToast]);
     const [dragDepth, setDragDepth] = useState(0);
     const modalOpen = isViewerOpen || isDuplicatesModalOpen || isSettingsOpen || importZipDialog.open;
 
@@ -58,9 +72,12 @@ function App() {
             const models = paths.filter((p) => /\.(stl|3mf|obj)$/i.test(p));
             if (zips.length > 0) openImportZip(zips);
             if (models.length > 0) {
-                void api.importFilePaths(models).then((count) => {
-                    if (count > 0) void loadModels();
-                });
+                api.importFilePaths(models)
+                    .then((count) => {
+                        pushToast({ kind: count > 0 ? 'success' : 'info', title: count > 0 ? `Added ${count} model${count === 1 ? '' : 's'}` : 'Those files are already in the library' });
+                        if (count > 0) void loadModels();
+                    })
+                    .catch((error) => pushToast({ kind: 'error', title: 'Import failed', message: describeError(error) }));
             }
         };
         window.addEventListener('dragenter', onDragEnter);
@@ -73,7 +90,7 @@ function App() {
             window.removeEventListener('dragover', onDragOver);
             window.removeEventListener('drop', onDrop);
         };
-    }, [openImportZip, loadModels]);
+    }, [openImportZip, loadModels, pushToast]);
 
     useEffect(() => {
         const api = window.electronAPI;
@@ -100,14 +117,16 @@ function App() {
         });
         const unsubscribeProgress = api.onIndexProgress((progress) => setIndexProgress(progress));
         const unsubscribeUpdates = api.onUpdateStatus((status) => setUpdateStatus(status));
+        const unsubscribeNotices = api.onAppNotice((notice) => pushToast(notice));
 
         return () => {
             unsubscribeModels();
             unsubscribeCollections();
             unsubscribeProgress();
             unsubscribeUpdates();
+            unsubscribeNotices();
         };
-    }, [loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, setUpdateStatus]);
+    }, [loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, setUpdateStatus, pushToast]);
 
     return (
         <div className="h-screen w-screen flex flex-col bg-primary-bg overflow-hidden text-text-primary transition-colors duration-200">
@@ -140,6 +159,7 @@ function App() {
             {importZipDialog.open && <ImportZipDialog />}
             <BulkActionsBar />
             <UpdateBanner />
+            <ToastHost />
 
             {dragDepth > 0 && (
                 <div className="fixed inset-0 z-[70] bg-accent-blue/10 border-4 border-dashed border-accent-blue pointer-events-none flex items-center justify-center">

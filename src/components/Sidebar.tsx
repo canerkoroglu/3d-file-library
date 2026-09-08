@@ -4,7 +4,7 @@ import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
 export default function Sidebar() {
-    const { collections, selectedCollection, setSelectedCollection, openDuplicatesModal, openSettings, openImportZip, indexProgress, libraryStats, setSearchQuery, searchQuery } = useStore();
+    const { collections, selectedCollection, setSelectedCollection, openDuplicatesModal, openSettings, openImportZip, indexProgress, libraryStats, setSearchQuery, searchQuery, reportError, pushToast } = useStore();
     const missingCount = libraryStats?.missing ?? 0;
     const isShowingMissing = searchQuery.trim().toLowerCase() === 'is:missing';
 
@@ -42,7 +42,7 @@ export default function Sidebar() {
             setNewCollectionName('');
             setIsCreatingCollection(false);
         } catch (error) {
-            console.error('Failed to create collection:', error);
+            reportError('Could not create the collection', error);
         }
     };
 
@@ -57,7 +57,7 @@ export default function Sidebar() {
             const newCollections = await window.electronAPI.getCollections();
             useStore.getState().setCollections(newCollections);
         } catch (error) {
-            console.error('Failed to rename collection:', error);
+            reportError('Could not rename the collection', error);
         } finally {
             setEditingCollection(null);
         }
@@ -77,7 +77,7 @@ export default function Sidebar() {
                     useStore.getState().setCollections(newCollections);
                     if (selectedCollection === id) setSelectedCollection(null);
                 } catch (error) {
-                    console.error('Failed to delete collection:', error);
+                    reportError('Could not delete the collection', error);
                 }
                 closeConfirmDialog();
             }
@@ -90,10 +90,10 @@ export default function Sidebar() {
             // Reload collections
             const newCollections = await window.electronAPI.getCollections();
             useStore.getState().setCollections(newCollections);
-        } catch (error: any) {
-            // Don't show error if user just cancelled the dialog
-            if (error?.message !== 'No folder selected') {
-                console.error('Failed to add watched folder:', error);
+        } catch (error) {
+            // Cancelling the dialog is not an error.
+            if (!(error instanceof Error && error.message.includes('No folder selected'))) {
+                reportError('Could not add the folder', error);
             }
         }
     };
@@ -101,8 +101,9 @@ export default function Sidebar() {
     const handleRefreshFolders = async () => {
         try {
             await window.electronAPI.refreshWatchedFolders();
+            pushToast({ kind: 'success', title: 'Watched folders re-synced' });
         } catch (error) {
-            console.error('Failed to refresh folders:', error);
+            reportError('Could not refresh the watched folders', error);
         }
     };
 
@@ -128,7 +129,7 @@ export default function Sidebar() {
                         setSelectedCollection(null);
                     }
                 } catch (error) {
-                    console.error('Failed to remove watched folder:', error);
+                    reportError('Could not remove the watched folder', error);
                 }
                 closeConfirmDialog();
             }

@@ -9,6 +9,7 @@ import {
     markFolderModelsMissing,
     markModelMissingByPath,
     notifyModelsUpdated,
+    notifyUser,
     SUPPORTED_EXTENSIONS,
 } from './library';
 import { enqueueModel, dequeueModel } from './indexer';
@@ -194,10 +195,10 @@ export async function syncFolder(folderId: number, folderPath: string): Promise<
     return { added, restored, missing };
 }
 
-function activeWatchedFolders(): Array<{ id: number; folder_path: string }> {
+function activeWatchedFolders(): Array<{ id: number; name: string; folder_path: string }> {
     return getDatabase()
-        .prepare("SELECT id, folder_path FROM collections WHERE type = 'watched' AND is_active = 1 AND folder_path IS NOT NULL")
-        .all() as Array<{ id: number; folder_path: string }>;
+        .prepare("SELECT id, name, folder_path FROM collections WHERE type = 'watched' AND is_active = 1 AND folder_path IS NOT NULL")
+        .all() as Array<{ id: number; name: string; folder_path: string }>;
 }
 
 /**
@@ -216,13 +217,32 @@ export async function checkFolderAvailability(): Promise<void> {
             if (online && !watched) {
                 console.log(`[Watcher] Folder is back: ${folder.folder_path}`);
                 startWatchingFolder(folder.id, folder.folder_path);
-                await syncFolder(folder.id, folder.folder_path);
+                const result = await syncFolder(folder.id, folder.folder_path);
+                notifyUser({
+                    kind: 'success',
+                    title: `${folder.name} is back online`,
+                    message: result.restored > 0 ? `${result.restored} model${result.restored === 1 ? '' : 's'} restored.` : undefined,
+                });
                 changed = true;
             } else if (!online && watched) {
                 console.warn(`[Watcher] Folder disappeared: ${folder.folder_path}`);
                 await stopWatchingFolder(folder.id);
-                const flagged = markFolderModelsMissing(folder.id);
-                if (flagged > 0) notifyModelsUpdated();
+                // The watcher may already have flagged files one by one; report the folder's total either way.
+                if (markFolderModelsMissing(folder.id) > 0) notifyModelsUpdated();
+                const { missing } = getDatabase().prepare(`
+                    SELECT COUNT(*) AS missing FROM models m
+                    JOIN model_collections mc ON mc.model_id = m.id
+                    WHERE mc.collection_id = ? AND m.missing_since IS NOT NULL
+                `).get(folder.id) as { missing: number };
+                notifyUser({
+                    kind: 'warning',
+                    title: `${folder.name} is unavailable`,
+                    message: [
+                        'Drive disconnected or folder moved.',
+                        missing > 0 ? `${missing} model${missing === 1 ? '' : 's'} flagged missing.` : null,
+                        'Tags and notes are kept.',
+                    ].filter(Boolean).join(' '),
+                });
                 changed = true;
             }
         }

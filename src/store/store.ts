@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { describeError } from '../lib/errors';
 import type {
     Collection,
     DuplicateGroup,
@@ -14,6 +15,22 @@ import type {
 } from '../types';
 
 type Theme = 'dark' | 'light' | 'system';
+
+export type ToastKind = 'info' | 'success' | 'warning' | 'error';
+export interface Toast {
+    id: number;
+    kind: ToastKind;
+    title: string;
+    message?: string;
+}
+interface ToastInput {
+    kind: ToastKind;
+    title: string;
+    message?: string;
+    /** Milliseconds before auto-dismiss; errors and warnings stay longer. 0 keeps it until dismissed. */
+    timeout?: number;
+}
+let nextToastId = 1;
 
 const SEARCH_DEBOUNCE_MS = 200;
 const PAGE_SIZE = 200;
@@ -77,7 +94,14 @@ interface AppState {
     updateStatus: UpdateStatus | null;
     /** Version the user dismissed the update banner for. */
     dismissedUpdateVersion: string | null;
+    toasts: Toast[];
     theme: Theme;
+
+    // Notifications
+    pushToast: (toast: ToastInput) => number;
+    dismissToast: (id: number) => void;
+    /** Shows an error toast built from any thrown value. */
+    reportError: (title: string, error: unknown) => void;
 
     // Actions
     setTheme: (theme: Theme) => void;
@@ -178,7 +202,21 @@ export const useStore = create<AppState>((set, get) => ({
     importZipDialog: { open: false, zipPaths: [] },
     updateStatus: null,
     dismissedUpdateVersion: null,
+    toasts: [],
     theme: readStoredTheme(),
+
+    pushToast: (toast) => {
+        const id = nextToastId++;
+        set((state) => ({ toasts: [...state.toasts.slice(-4), { id, kind: toast.kind, title: toast.title, message: toast.message }] }));
+        const timeout = toast.timeout ?? (toast.kind === 'error' || toast.kind === 'warning' ? 9000 : 4500);
+        if (timeout > 0) setTimeout(() => get().dismissToast(id), timeout);
+        return id;
+    },
+    dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+    reportError: (title, error) => {
+        console.error(title, error);
+        get().pushToast({ kind: 'error', title, message: describeError(error) });
+    },
 
     setTheme: (theme) => {
         set({ theme });
@@ -254,21 +292,21 @@ export const useStore = create<AppState>((set, get) => ({
         try {
             set({ updateStatus: await window.electronAPI.checkForUpdates() });
         } catch (error) {
-            console.error('Failed to check for updates:', error);
+            get().reportError('Update check failed', error);
         }
     },
     downloadUpdate: async () => {
         try {
             await window.electronAPI.downloadUpdate();
         } catch (error) {
-            console.error('Failed to download update:', error);
+            get().reportError('Update download failed', error);
         }
     },
     installUpdate: async () => {
         try {
             await window.electronAPI.installUpdate();
         } catch (error) {
-            console.error('Failed to install update:', error);
+            get().reportError('Could not install the update', error);
         }
     },
 
@@ -317,7 +355,7 @@ export const useStore = create<AppState>((set, get) => ({
                 ...(refreshedSelection ? { selectedModel: refreshedSelection } : {}),
             });
         } catch (error) {
-            console.error('Failed to load models:', error);
+            get().reportError('Could not load models', error);
         } finally {
             if (sequence === loadSequence) set({ isLoading: false });
         }
@@ -337,7 +375,7 @@ export const useStore = create<AppState>((set, get) => ({
                 totalModels: page.total,
             });
         } catch (error) {
-            console.error('Failed to load more models:', error);
+            get().reportError('Could not load more models', error);
         } finally {
             if (sequence === loadSequence) set({ isLoadingMore: false });
         }
@@ -347,7 +385,7 @@ export const useStore = create<AppState>((set, get) => ({
         try {
             set({ tags: await window.electronAPI.getTags() });
         } catch (error) {
-            console.error('Failed to load tags:', error);
+            get().reportError('Could not load tags', error);
         }
     },
 
@@ -355,7 +393,7 @@ export const useStore = create<AppState>((set, get) => ({
         try {
             set({ collections: await window.electronAPI.getCollections() });
         } catch (error) {
-            console.error('Failed to load collections:', error);
+            get().reportError('Could not load collections', error);
         }
     },
 
@@ -364,7 +402,7 @@ export const useStore = create<AppState>((set, get) => ({
             await window.electronAPI.importFiles();
             await get().loadModels();
         } catch (error) {
-            console.error('Failed to import files:', error);
+            get().reportError('Import failed', error);
         }
     },
 
@@ -373,7 +411,7 @@ export const useStore = create<AppState>((set, get) => ({
             await window.electronAPI.createTag(name, color);
             await get().loadTags();
         } catch (error) {
-            console.error('Failed to create tag:', error);
+            get().reportError(`Could not create tag "${name}"`, error);
         }
     },
 
@@ -391,7 +429,7 @@ export const useStore = create<AppState>((set, get) => ({
         try {
             await window.electronAPI.addTagToModel(modelId, tagId);
         } catch (error) {
-            console.error('Failed to add tag:', error);
+            get().reportError('Could not add tag', error);
             await get().loadModels();
         }
     },
@@ -407,7 +445,7 @@ export const useStore = create<AppState>((set, get) => ({
         try {
             await window.electronAPI.removeTagFromModel(modelId, tagId);
         } catch (error) {
-            console.error('Failed to remove tag:', error);
+            get().reportError('Could not remove tag', error);
             await get().loadModels();
         }
     },
@@ -421,7 +459,7 @@ export const useStore = create<AppState>((set, get) => ({
                 wastedSpace: { totalWasted: report.totalWasted, groupCount: report.groupCount, unhashedCount: report.unhashedCount },
             });
         } catch (error) {
-            console.error('Failed to check for duplicates:', error);
+            get().reportError('Duplicate scan failed', error);
         } finally {
             set({ isLoading: false });
         }
@@ -433,7 +471,7 @@ export const useStore = create<AppState>((set, get) => ({
             await get().checkForDuplicates();
             await get().loadModels();
         } catch (error) {
-            console.error('Failed to delete duplicate:', error);
+            get().reportError('Could not remove the duplicate', error);
         }
     },
 
@@ -445,7 +483,7 @@ export const useStore = create<AppState>((set, get) => ({
             set({ selectedModels: new Set<number>(), selectionMode: false, selectionAnchor: null });
             await get().loadModels();
         } catch (error) {
-            console.error('Failed to bulk delete:', error);
+            get().reportError('Could not remove the selected models', error);
         }
     },
 
@@ -453,23 +491,38 @@ export const useStore = create<AppState>((set, get) => ({
         try {
             set({ slicers: await window.electronAPI.getSlicers(rescan) });
         } catch (error) {
-            console.error('Failed to load slicers:', error);
+            get().reportError('Could not look for slicers', error);
         }
     },
 
     setDefaultSlicer: async (id) => {
-        await window.electronAPI.setDefaultSlicer(id);
-        await get().loadSlicers();
+        try {
+            await window.electronAPI.setDefaultSlicer(id);
+            await get().loadSlicers();
+        } catch (error) {
+            get().reportError('Could not save the default slicer', error);
+        }
     },
 
     addCustomSlicer: async () => {
-        const added = await window.electronAPI.addCustomSlicer();
-        if (added) await get().loadSlicers();
+        try {
+            const added = await window.electronAPI.addCustomSlicer();
+            if (added) {
+                await get().loadSlicers();
+                get().pushToast({ kind: 'success', title: `Added ${added.name}` });
+            }
+        } catch (error) {
+            get().reportError('Could not add the slicer', error);
+        }
     },
 
     removeCustomSlicer: async (id) => {
-        await window.electronAPI.removeCustomSlicer(id);
-        await get().loadSlicers();
+        try {
+            await window.electronAPI.removeCustomSlicer(id);
+            await get().loadSlicers();
+        } catch (error) {
+            get().reportError('Could not remove the slicer', error);
+        }
     },
 
     /** Returns an error message on failure, null on success. */
@@ -478,9 +531,8 @@ export const useStore = create<AppState>((set, get) => ({
             await window.electronAPI.openInSlicer(modelPath, slicerId);
             return null;
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.error('Failed to open in slicer:', message);
-            return message.replace(/^Error invoking remote method '[^']+': Error: /, '');
+            console.error('Failed to open in slicer:', error);
+            return describeError(error, 'Could not open the slicer');
         }
     },
 
@@ -491,7 +543,7 @@ export const useStore = create<AppState>((set, get) => ({
             await Promise.all(ids.map((id) => window.electronAPI.addTagToModel(id, tagId)));
             await get().loadModels();
         } catch (error) {
-            console.error('Failed to bulk add tag:', error);
+            get().reportError('Could not add the tag to the selection', error);
         }
     },
 
@@ -502,7 +554,7 @@ export const useStore = create<AppState>((set, get) => ({
             await Promise.all(ids.map((id) => window.electronAPI.removeTagFromModel(id, tagId)));
             await get().loadModels();
         } catch (error) {
-            console.error('Failed to bulk remove tag:', error);
+            get().reportError('Could not remove the tag from the selection', error);
         }
     },
 
@@ -513,7 +565,7 @@ export const useStore = create<AppState>((set, get) => ({
             await Promise.all(ids.map((id) => window.electronAPI.addModelToCollection(id, collectionId)));
             await get().loadModels();
         } catch (error) {
-            console.error('Failed to bulk add to collection:', error);
+            get().reportError('Could not add the selection to the collection', error);
         }
     },
 }));

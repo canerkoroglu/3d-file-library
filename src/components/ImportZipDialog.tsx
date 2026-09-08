@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, FileArchive, Plus, Trash2, FolderOpen, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { useStore } from '../store/store';
 import type { ZipImportResult } from '../types';
+import { describeError } from '../lib/errors';
 
 function baseName(filePath: string): string {
     return filePath.split(/[\\/]/).pop() ?? filePath;
@@ -39,7 +40,7 @@ export default function ImportZipDialog() {
             setResults(outcome);
             await loadModels();
         } catch (err) {
-            setError(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : String(err));
+            setError(describeError(err, 'Import failed'));
         } finally {
             setIsImporting(false);
         }

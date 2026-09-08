@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
-import type { ElectronAPI, IndexProgress, ThumbnailRenderRequest, UpdateStatus } from '../src/types';
+import type { AppNotice, ElectronAPI, IndexProgress, ThumbnailRenderRequest, UpdateStatus } from '../src/types';
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
     const listener = (_event: IpcRendererEvent, payload: T) => callback(payload);
@@ -75,6 +75,7 @@ const electronAPI: ElectronAPI = {
 
     // Events
     onUpdateStatus: (callback) => subscribe<UpdateStatus>('updates:status', callback),
+    onAppNotice: (callback) => subscribe<AppNotice>('app:notice', callback),
     onModelsUpdated: (callback) => subscribe<void>('models-updated', () => callback()),
     onCollectionsUpdated: (callback) => subscribe<void>('collections-updated', () => callback()),
     onIndexProgress: (callback) => subscribe<IndexProgress>('index-progress', callback),

@@ -32,7 +32,7 @@ const LICENSE_OPTIONS = [
 
 export default function MetadataEditor({ modelId, currentMetadata, onClose }: MetadataEditorProps) {
     const [metadata, setMetadata] = useState<SourceMetadata>(currentMetadata || {});
-    const { loadModels } = useStore();
+    const { loadModels, reportError } = useStore();
 
     const handleSave = async () => {
         try {
@@ -40,8 +40,7 @@ export default function MetadataEditor({ modelId, currentMetadata, onClose }: Me
             await loadModels();
             onClose();
         } catch (error) {
-            console.error('Failed to update metadata:', error);
-            window.alert('Failed to save metadata');
+            reportError('Could not save the metadata', error);
         }
     };
 

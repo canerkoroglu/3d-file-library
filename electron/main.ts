@@ -33,6 +33,7 @@ libraryEvents.on('models-updated', () => {
     }, MODELS_UPDATED_DEBOUNCE_MS);
 });
 libraryEvents.on('collections-updated', () => sendToRenderer('collections-updated'));
+libraryEvents.on('notice', (notice) => sendToRenderer('app:notice', notice));
 
 function createWindow(): void {
     mainWindow = new BrowserWindow({
