@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Folder, FolderOpen, FolderX, Plus, Settings, Inbox, Copy, X, RefreshCw, Edit2, Loader2, FileX } from 'lucide-react';
+import { Folder, FolderOpen, FolderX, Plus, Settings, Inbox, Copy, X, RefreshCw, Edit2, Loader2, FileX, FileArchive } from 'lucide-react';
 import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
 export default function Sidebar() {
-    const { collections, selectedCollection, setSelectedCollection, openDuplicatesModal, openSettings, indexProgress, libraryStats, setSearchQuery, searchQuery } = useStore();
+    const { collections, selectedCollection, setSelectedCollection, openDuplicatesModal, openSettings, openImportZip, indexProgress, libraryStats, setSearchQuery, searchQuery } = useStore();
     const missingCount = libraryStats?.missing ?? 0;
     const isShowingMissing = searchQuery.trim().toLowerCase() === 'is:missing';
 
@@ -309,6 +309,14 @@ export default function Sidebar() {
                 <h3 className="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-2 px-3">
                     Tools
                 </h3>
+                <button
+                    onClick={() => openImportZip()}
+                    className="sidebar-item inactive w-full"
+                    title="Extract downloaded archives into a watched folder"
+                >
+                    <FileArchive size={18} />
+                    <span>Import ZIP…</span>
+                </button>
                 <button
                     onClick={openDuplicatesModal}
                     className="sidebar-item inactive w-full"

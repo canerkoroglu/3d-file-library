@@ -41,7 +41,7 @@ async function analyze(job: AnalysisJob): Promise<AnalysisResult> {
 
     const unchanged = !job.force && job.hasHash && job.knownMtimeMs === mtimeMs && job.knownSize === stat.size;
     if (unchanged) {
-        return { mtimeMs, size: stat.size, unchanged: true, hash: null, geometry: null, printMeta: null, readme: null, license: null, thumbnail: null };
+        return { mtimeMs, size: stat.size, unchanged: true, hash: null, geometry: null, printMeta: null, readme: null, license: null, sourceSite: null, sourceUrl: null, thumbnail: null };
     }
 
     const [hash, sidecars] = await Promise.all([hashFile(job.filepath), findSidecars(job.filepath)]);
@@ -93,6 +93,8 @@ async function analyze(job: AnalysisJob): Promise<AnalysisResult> {
         printMeta,
         readme: sidecars.readme,
         license: printMeta?.license ?? sidecars.license,
+        sourceSite: sidecars.sourceSite,
+        sourceUrl: sidecars.sourceUrl,
         thumbnail,
     };
 }

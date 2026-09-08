@@ -5,7 +5,7 @@ import path from 'path';
 import { analyzeStl, isBinaryStl } from '../electron/analyzers/stl';
 import { analyzeObj } from '../electron/analyzers/obj';
 import { analyzeModelXml, parseSlicerConfigs } from '../electron/analyzers/threemf';
-import { detectLicense, findSidecars } from '../electron/analyzers/sidecars';
+import { detectLicense, detectSource, findSidecars } from '../electron/analyzers/sidecars';
 import { GeometryAccumulator } from '../electron/analyzers/geometry';
 
 let dir: string;
@@ -143,15 +143,36 @@ describe('sidecars', () => {
         fs.mkdirSync(path.join(folder, 'files'), { recursive: true });
         fs.mkdirSync(path.join(folder, 'images'));
         fs.writeFileSync(path.join(folder, 'files', 'dragon.stl'), '');
-        fs.writeFileSync(path.join(folder, 'files', 'README.txt'), 'Print at 0.2mm. Licensed under CC BY-NC-SA 4.0');
+        fs.writeFileSync(path.join(folder, 'files', 'README.txt'), 'Print at 0.2mm. Licensed under CC BY-NC-SA 4.0\nThing: https://www.thingiverse.com/thing:2952483.');
         fs.writeFileSync(path.join(folder, 'images', 'dragon_front.jpg'), '');
         fs.writeFileSync(path.join(folder, 'images', 'aaa.jpg'), '');
 
         const info = await findSidecars(path.join(folder, 'files', 'dragon.stl'));
         expect(info.readme).toContain('Print at 0.2mm');
         expect(info.license).toBe('CC BY-NC-SA 4.0');
+        expect(info.sourceSite).toBe('Thingiverse');
+        expect(info.sourceUrl).toBe('https://www.thingiverse.com/thing:2952483');
         expect(info.imagePath).toBe(path.join(folder, 'images', 'dragon_front.jpg'));
         expect(info.imageSource).toBe('sidecar');
+    });
+
+    it('reads README and LICENSE from the parent of a files/ sub-folder', async () => {
+        const folder = path.join(dir, 'thing-parent');
+        fs.mkdirSync(path.join(folder, 'files'), { recursive: true });
+        fs.writeFileSync(path.join(folder, 'files', 'part.stl'), '');
+        fs.writeFileSync(path.join(folder, 'README.txt'), 'Downloaded from https://www.printables.com/model/777-thing');
+        fs.writeFileSync(path.join(folder, 'LICENSE.txt'), 'CC BY-SA 4.0');
+        const info = await findSidecars(path.join(folder, 'files', 'part.stl'));
+        expect(info.readme).toContain('printables.com');
+        expect(info.sourceSite).toBe('Printables');
+        expect(info.license).toBe('CC BY-SA 4.0');
+
+        // A README above an ordinary folder is not attributed to the model.
+        const other = path.join(dir, 'unrelated', 'dragons');
+        fs.mkdirSync(other, { recursive: true });
+        fs.writeFileSync(path.join(other, 'x.stl'), '');
+        fs.writeFileSync(path.join(dir, 'unrelated', 'README.txt'), 'library notes');
+        expect((await findSidecars(path.join(other, 'x.stl'))).readme).toBeNull();
     });
 
     it('falls back to a folder image and detects licenses from text', async () => {
@@ -166,6 +187,17 @@ describe('sidecars', () => {
         expect(detectLicense('This work is licensed under a Creative Commons Attribution 4.0 (CC BY) license')).toBe('CC BY 4.0');
         expect(detectLicense('released to the public domain')).toBe('CC0 (Public Domain)');
         expect(detectLicense('no license here')).toBeNull();
+    });
+});
+
+describe('detectSource', () => {
+    it('recognises the common sharing sites', () => {
+        expect(detectSource('see https://www.printables.com/model/12345-benchy for details')).toEqual({ site: 'Printables', url: 'https://www.printables.com/model/12345-benchy' });
+        expect(detectSource('https://www.myminifactory.com/object/3d-print-dragon-1234')?.site).toBe('MyMiniFactory');
+        expect(detectSource('https://cults3d.com/en/3d-model/art/dragon-bust')?.site).toBe('Cults3D');
+        expect(detectSource('https://makerworld.com/en/models/98765#profileId-1')?.site).toBe('MakerWorld');
+        expect(detectSource('no links here')).toBeNull();
+        expect(detectSource(null)).toBeNull();
     });
 });
 

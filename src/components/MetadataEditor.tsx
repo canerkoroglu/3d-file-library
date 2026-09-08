@@ -15,6 +15,7 @@ const SOURCE_OPTIONS = [
     'MyMiniFactory',
     'Cults3D',
     'Thangs',
+    'MakerWorld',
     'Custom'
 ];
 

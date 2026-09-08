@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { FileArchive } from 'lucide-react';
 import { useStore } from './store/store';
 import Sidebar from './components/Sidebar';
 import FilterBar from './components/FilterBar';
@@ -7,9 +8,54 @@ import ModelViewer from './components/ModelViewer';
 import DuplicatesModal from './components/DuplicatesModal';
 import SettingsModal from './components/SettingsModal';
 import BulkActionsBar from './components/BulkActionsBar';
+import ImportZipDialog from './components/ImportZipDialog';
 
 function App() {
-    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen } = useStore();
+    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip } = useStore();
+    const [dragDepth, setDragDepth] = useState(0);
+
+    // Dropping ZIP archives opens the importer; dropping model files registers them in place.
+    useEffect(() => {
+        const api = window.electronAPI;
+        if (!api) return;
+        const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
+        const onDragEnter = (e: DragEvent) => {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            setDragDepth((d) => d + 1);
+        };
+        const onDragLeave = (e: DragEvent) => {
+            if (!hasFiles(e)) return;
+            setDragDepth((d) => Math.max(0, d - 1));
+        };
+        const onDragOver = (e: DragEvent) => {
+            if (hasFiles(e)) e.preventDefault();
+        };
+        const onDrop = (e: DragEvent) => {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            setDragDepth(0);
+            const paths = Array.from(e.dataTransfer?.files ?? []).map((f) => api.getPathForFile(f)).filter(Boolean);
+            const zips = paths.filter((p) => /\.zip$/i.test(p));
+            const models = paths.filter((p) => /\.(stl|3mf|obj)$/i.test(p));
+            if (zips.length > 0) openImportZip(zips);
+            if (models.length > 0) {
+                void api.importFilePaths(models).then((count) => {
+                    if (count > 0) void loadModels();
+                });
+            }
+        };
+        window.addEventListener('dragenter', onDragEnter);
+        window.addEventListener('dragleave', onDragLeave);
+        window.addEventListener('dragover', onDragOver);
+        window.addEventListener('drop', onDrop);
+        return () => {
+            window.removeEventListener('dragenter', onDragEnter);
+            window.removeEventListener('dragleave', onDragLeave);
+            window.removeEventListener('dragover', onDragOver);
+            window.removeEventListener('drop', onDrop);
+        };
+    }, [openImportZip, loadModels]);
 
     useEffect(() => {
         const api = window.electronAPI;
@@ -70,7 +116,17 @@ function App() {
             {isViewerOpen && <ModelViewer />}
             {isDuplicatesModalOpen && <DuplicatesModal />}
             {isSettingsOpen && <SettingsModal />}
+            {importZipDialog.open && <ImportZipDialog />}
             <BulkActionsBar />
+
+            {dragDepth > 0 && (
+                <div className="fixed inset-0 z-[70] bg-accent-blue/10 border-4 border-dashed border-accent-blue pointer-events-none flex items-center justify-center">
+                    <div className="bg-primary-card border border-accent-gray rounded-xl px-6 py-4 shadow-2xl flex items-center gap-3 text-text-primary">
+                        <FileArchive size={22} className="text-accent-blue" />
+                        Drop ZIP archives or STL / 3MF / OBJ files to import
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

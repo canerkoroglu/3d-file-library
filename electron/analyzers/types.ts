@@ -14,6 +14,9 @@ export interface SidecarInfo {
     /** How closely the image relates to this exact model. */
     imageSource: 'sidecar' | 'folder' | null;
     license: string | null;
+    /** Sharing site and model page found in a README next to the file. */
+    sourceSite: string | null;
+    sourceUrl: string | null;
 }
 
 export interface AnalysisJob {
@@ -41,6 +44,8 @@ export interface AnalysisResult {
     printMeta: PrintMetadata | null;
     readme: string | null;
     license: string | null;
+    sourceSite: string | null;
+    sourceUrl: string | null;
     thumbnail: { path: string; source: ThumbnailSource } | null;
 }
 

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { ElectronAPI, IndexProgress, ThumbnailRenderRequest } from '../src/types';
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -38,6 +38,12 @@ const electronAPI: ElectronAPI = {
     addCustomSlicer: () => ipcRenderer.invoke('add-custom-slicer'),
     removeCustomSlicer: (id) => ipcRenderer.invoke('remove-custom-slicer', id),
     openInSlicer: (modelPath, slicerId) => ipcRenderer.invoke('open-in-slicer', modelPath, slicerId),
+
+    // Importing
+    pickZipFiles: () => ipcRenderer.invoke('pick-zip-files'),
+    importZip: (request) => ipcRenderer.invoke('import-zip', request),
+    importFilePaths: (paths) => ipcRenderer.invoke('import-file-paths', paths),
+    getPathForFile: (file) => webUtils.getPathForFile(file),
 
     // Utilities
     openFolder: (filePath) => ipcRenderer.invoke('open-folder', filePath),

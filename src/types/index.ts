@@ -126,6 +126,22 @@ export interface DuplicateReport {
     unhashedCount: number;
 }
 
+export interface ZipImportRequest {
+    zipPaths: string[];
+    /** Watched folder the archives are extracted into. */
+    collectionId: number;
+}
+
+export interface ZipImportResult {
+    zipPath: string;
+    /** Folder the archive was extracted into. */
+    folder: string;
+    extracted: number;
+    models: number;
+    skipped: number;
+    error?: string;
+}
+
 export interface IndexProgress {
     queued: number;
     active: number;
@@ -185,6 +201,14 @@ export interface ElectronAPI {
     removeCustomSlicer: (id: string) => Promise<void>;
     /** Opens the file in the given slicer, or the default one when no id is passed. */
     openInSlicer: (modelPath: string, slicerId?: string) => Promise<void>;
+
+    // Importing
+    pickZipFiles: () => Promise<string[]>;
+    importZip: (request: ZipImportRequest) => Promise<ZipImportResult[]>;
+    /** Registers loose model files (e.g. dropped on the window) in place. Returns how many were new. */
+    importFilePaths: (paths: string[]) => Promise<number>;
+    /** Resolves the filesystem path of a File from a drag-and-drop event. */
+    getPathForFile: (file: File) => string;
 
     // Utility operations
     openFolder: (path: string) => Promise<void>;

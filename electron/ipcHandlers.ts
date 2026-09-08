@@ -4,6 +4,7 @@ import path from 'path';
 import { getDatabase } from './database';
 import {
     deleteModel,
+    fileTypeOf,
     findDuplicates,
     forgetMissingModels,
     getLibraryStats,
@@ -22,7 +23,8 @@ import { isFolderWatched, startWatchingFolder, stopWatchingFolder, syncFolder } 
 import { dequeueModel, enqueueAll, enqueueModel, getProgress } from './indexer';
 import { cancelThumbnailRender, requestThumbnailRender, saveThumbnailFromBase64 } from './thumbnails';
 import { addCustomSlicer, listSlicers, openInSlicer, removeCustomSlicer, setDefaultSlicer } from './slicers';
-import type { Collection, FilterOptions, Model, SourceMetadata, Tag } from '../src/types';
+import { importZipFiles } from './zipImport';
+import type { Collection, FilterOptions, Model, SourceMetadata, Tag, ZipImportRequest } from '../src/types';
 
 type Handler<T> = (event: IpcMainInvokeEvent, ...args: any[]) => Promise<T> | T;
 
@@ -83,6 +85,30 @@ export function setupIpcHandlers(): void {
         if (imported.length > 0) notifyModelsUpdated();
         return imported;
     });
+
+    handle('import-file-paths', (_event, paths: string[]): number => {
+        let imported = 0;
+        for (const filePath of paths) {
+            if (!fileTypeOf(filePath) || !fs.existsSync(filePath)) continue;
+            const outcome = importModel(path.resolve(filePath), null);
+            if (!outcome) continue;
+            enqueueModel(outcome.id);
+            if (outcome.created || outcome.restored) imported++;
+        }
+        if (imported > 0) notifyModelsUpdated();
+        return imported;
+    });
+
+    handle('pick-zip-files', async (event): Promise<string[]> => {
+        const result = await dialog.showOpenDialog(windowFor(event)!, {
+            title: 'Choose ZIP archives to import',
+            properties: ['openFile', 'multiSelections'],
+            filters: [{ name: 'ZIP archives', extensions: ['zip'] }],
+        });
+        return result.canceled ? [] : result.filePaths;
+    });
+
+    handle('import-zip', (_event, request: ZipImportRequest) => importZipFiles(request.zipPaths, request.collectionId));
 
     handle('delete-file', (_event, id: number) => {
         dequeueModel(id);

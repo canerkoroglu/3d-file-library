@@ -68,6 +68,7 @@ interface AppState {
     indexProgress: IndexProgress | null;
     libraryStats: LibraryStats | null;
     slicers: Slicer[];
+    importZipDialog: { open: boolean; zipPaths: string[] };
     theme: Theme;
 
     // Actions
@@ -86,6 +87,8 @@ interface AppState {
     openDuplicatesModal: () => void;
     closeDuplicatesModal: () => void;
     setIndexProgress: (progress: IndexProgress | null) => void;
+    openImportZip: (zipPaths?: string[]) => void;
+    closeImportZip: () => void;
 
     // Selection
     toggleModelSelection: (id: number) => void;
@@ -153,6 +156,7 @@ export const useStore = create<AppState>((set, get) => ({
     indexProgress: null,
     libraryStats: null,
     slicers: [],
+    importZipDialog: { open: false, zipPaths: [] },
     theme: readStoredTheme(),
 
     setTheme: (theme) => {
@@ -215,6 +219,14 @@ export const useStore = create<AppState>((set, get) => ({
     openDuplicatesModal: () => set({ isDuplicatesModalOpen: true }),
     closeDuplicatesModal: () => set({ isDuplicatesModalOpen: false, duplicateGroups: [], wastedSpace: null }),
     setIndexProgress: (progress) => set({ indexProgress: progress }),
+    openImportZip: (zipPaths) =>
+        set((state) => ({
+            importZipDialog: {
+                open: true,
+                zipPaths: [...new Set([...(state.importZipDialog.open ? state.importZipDialog.zipPaths : []), ...(zipPaths ?? [])])],
+            },
+        })),
+    closeImportZip: () => set({ importZipDialog: { open: false, zipPaths: [] } }),
 
     toggleModelSelection: (id) =>
         set((state) => {

@@ -10,6 +10,7 @@ A desktop library for 3D printing files (STL, 3MF, OBJ). Point it at the folders
 - **Thumbnails**: embedded 3MF previews, sidecar images, or a 3D render produced in the background. You can also capture your own view from the viewer.
 - **Full-text search**: an SQLite FTS5 trigram index over names, folder paths, tags, notes, source metadata, slicer settings and README text, with a small query language (below).
 - **Organization**: many-to-many collections, colour-coded tags, source metadata (site, author, license, URL, notes).
+- **ZIP import**: drop a Thingiverse, Printables or MyMiniFactory download on the window (or use *Import ZIP…* in the sidebar) and it is extracted into a watched folder, one sub-folder per archive, so the README, license and preview images are indexed with the models. Links to the model page found in a README fill in the source and URL automatically. Dropping STL, 3MF or OBJ files registers them in place.
 - **Duplicate finder**: exact duplicates are detected from stored content hashes without rescanning your disk.
 - **3D viewer**: orbit, zoom and pan with Z-up orientation matching your slicer.
 - **Slicer integration**: installed slicers (Bambu Studio, OrcaSlicer, PrusaSlicer, SuperSlicer, Cura, ideaMaker, Lychee, CHITUBOX and more) are detected on macOS, Windows and Linux. Pick a default in Settings or choose per model from the viewer; anything the scan misses can be added by hand.
@@ -73,6 +74,7 @@ electron/
   fileWatcher.ts       chokidar watchers + folder reconciliation
   thumbnails.ts        render queue; the renderer draws 3D previews on request
   slicers.ts           slicer discovery per platform and launching
+  zipImport.ts         safe extraction of downloaded archives into a watched folder
   settings.ts          key/value preferences stored in the database
   indexer/index.ts     job queue feeding the worker process
   indexer/worker.ts    utility process: hashing, mesh stats, sidecars, images

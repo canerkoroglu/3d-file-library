@@ -573,9 +573,11 @@ export function applyAnalysis(modelId: number, result: AnalysisResult): void {
     const existing = db.prepare('SELECT source_metadata FROM models WHERE id = ?').get(modelId) as { source_metadata: string | null } | undefined;
     if (!existing) return;
 
-    // Fill in a detected license only when the user has not set one.
+    // Fill in detected license and source only where the user has not set them.
     const source = safeJson<SourceMetadata>(existing.source_metadata) ?? {};
     if (result.license && !source.license) source.license = result.license;
+    if (result.sourceSite && !source.source) source.source = result.sourceSite;
+    if (result.sourceUrl && !source.url) source.url = result.sourceUrl;
 
     db.transaction(() => {
         db.prepare(`
