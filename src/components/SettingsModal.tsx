@@ -1,11 +1,39 @@
-import { useState } from 'react';
-import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw, FileX, ExternalLink, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw, FileX, ExternalLink, Plus, Trash2, Download, Loader2 } from 'lucide-react';
 import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
 export default function SettingsModal() {
-    const { closeSettings, theme, setTheme, indexProgress, libraryStats, loadModels, slicers, loadSlicers, setDefaultSlicer, addCustomSlicer, removeCustomSlicer } = useStore();
+    const { closeSettings, theme, setTheme, indexProgress, libraryStats, loadModels, slicers, loadSlicers, setDefaultSlicer, addCustomSlicer, removeCustomSlicer, updateStatus, checkForUpdates, downloadUpdate, installUpdate } = useStore();
     const [rescanning, setRescanning] = useState(false);
+    const [autoCheck, setAutoCheck] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        void window.electronAPI.getAutoCheckUpdates().then(setAutoCheck).catch(() => setAutoCheck(true));
+    }, []);
+
+    const toggleAutoCheck = async (enabled: boolean) => {
+        setAutoCheck(enabled);
+        try {
+            await window.electronAPI.setAutoCheckUpdates(enabled);
+        } catch (error) {
+            console.error('Failed to save update preference:', error);
+        }
+    };
+
+    const updateText = (() => {
+        if (!updateStatus) return '';
+        switch (updateStatus.state) {
+            case 'unsupported': return updateStatus.message ?? '';
+            case 'checking': return 'Checking…';
+            case 'available': return `Version ${updateStatus.version} is available.`;
+            case 'not-available': return `You are up to date${updateStatus.checkedAt ? ` (checked ${new Date(updateStatus.checkedAt).toLocaleTimeString()})` : ''}.`;
+            case 'downloading': return `Downloading… ${Math.round(updateStatus.progress?.percent ?? 0)}%`;
+            case 'downloaded': return `Version ${updateStatus.version} is ready to install.`;
+            case 'error': return updateStatus.message ?? 'Update check failed.';
+            default: return '';
+        }
+    })();
 
     const handleRescan = async () => {
         setRescanning(true);
@@ -201,9 +229,49 @@ export default function SettingsModal() {
                             </div>
                             <div>
                                 <h4 className="text-lg font-semibold text-text-primary">Modelist</h4>
+                                <p className="text-text-secondary text-sm" data-testid="app-version">Version {updateStatus?.currentVersion ?? '…'}</p>
                                 <p className="text-text-secondary text-sm max-w-sm mx-auto pt-2">
                                     An offline-first 3D model organizer and viewer for STL, 3MF and OBJ files with collections, tags, full-text search and a 3D preview.
                                 </p>
+                            </div>
+                            <div className="text-left bg-primary-card rounded-lg border border-accent-gray p-3 space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {updateStatus?.state === 'available' && !updateStatus.manualInstall ? (
+                                        <button onClick={() => void downloadUpdate()} className="btn btn-primary text-sm">
+                                            <Download size={14} /> Download {updateStatus.version}
+                                        </button>
+                                    ) : updateStatus?.state === 'downloaded' ? (
+                                        <button onClick={() => void installUpdate()} className="btn btn-primary text-sm">
+                                            <RefreshCw size={14} /> Restart to update
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => void checkForUpdates()}
+                                            disabled={updateStatus?.state === 'unsupported' || updateStatus?.state === 'checking' || updateStatus?.state === 'downloading'}
+                                            className="btn btn-secondary text-sm disabled:opacity-50"
+                                            data-testid="check-updates"
+                                        >
+                                            {updateStatus?.state === 'checking' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                            Check for updates
+                                        </button>
+                                    )}
+                                    {updateStatus?.state === 'available' && updateStatus.manualInstall && updateStatus.releaseUrl && (
+                                        <button onClick={() => void window.electronAPI.openExternal(updateStatus.releaseUrl!)} className="btn btn-primary text-sm">
+                                            <ExternalLink size={14} /> Get {updateStatus.version}
+                                        </button>
+                                    )}
+                                    <span className={`text-sm ${updateStatus?.state === 'error' ? 'text-red-400' : 'text-text-secondary'}`} data-testid="update-status">{updateText}</span>
+                                </div>
+                                <label className={`flex items-center gap-2 text-sm text-text-primary select-none ${updateStatus?.state === 'unsupported' ? 'opacity-50' : 'cursor-pointer'}`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={autoCheck ?? true}
+                                        disabled={autoCheck === null || updateStatus?.state === 'unsupported'}
+                                        onChange={(e) => void toggleAutoCheck(e.target.checked)}
+                                        className="accent-blue-500"
+                                    />
+                                    Check for updates automatically
+                                </label>
                             </div>
                             <div className="pt-4 border-t border-accent-gray flex justify-center gap-4">
                                 <button

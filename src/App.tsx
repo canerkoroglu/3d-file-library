@@ -9,9 +9,10 @@ import DuplicatesModal from './components/DuplicatesModal';
 import SettingsModal from './components/SettingsModal';
 import BulkActionsBar from './components/BulkActionsBar';
 import ImportZipDialog from './components/ImportZipDialog';
+import UpdateBanner from './components/UpdateBanner';
 
 function App() {
-    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip, selectAllModels, clearSelection } = useStore();
+    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, setUpdateStatus, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip, selectAllModels, clearSelection } = useStore();
     const [dragDepth, setDragDepth] = useState(0);
     const modalOpen = isViewerOpen || isDuplicatesModalOpen || isSettingsOpen || importZipDialog.open;
 
@@ -84,6 +85,7 @@ function App() {
                 await loadModels();
                 setIndexProgress(await api.getIndexProgress());
                 void loadSlicers();
+                setUpdateStatus(await api.getUpdateStatus());
             } catch (error) {
                 console.error('Failed to initialize app data:', error);
             }
@@ -97,13 +99,15 @@ function App() {
             void loadCollections();
         });
         const unsubscribeProgress = api.onIndexProgress((progress) => setIndexProgress(progress));
+        const unsubscribeUpdates = api.onUpdateStatus((status) => setUpdateStatus(status));
 
         return () => {
             unsubscribeModels();
             unsubscribeCollections();
             unsubscribeProgress();
+            unsubscribeUpdates();
         };
-    }, [loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress]);
+    }, [loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, setUpdateStatus]);
 
     return (
         <div className="h-screen w-screen flex flex-col bg-primary-bg overflow-hidden text-text-primary transition-colors duration-200">
@@ -135,6 +139,7 @@ function App() {
             {isSettingsOpen && <SettingsModal />}
             {importZipDialog.open && <ImportZipDialog />}
             <BulkActionsBar />
+            <UpdateBanner />
 
             {dragDepth > 0 && (
                 <div className="fixed inset-0 z-[70] bg-accent-blue/10 border-4 border-dashed border-accent-blue pointer-events-none flex items-center justify-center">

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
-import type { ElectronAPI, IndexProgress, ThumbnailRenderRequest } from '../src/types';
+import type { ElectronAPI, IndexProgress, ThumbnailRenderRequest, UpdateStatus } from '../src/types';
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
     const listener = (_event: IpcRendererEvent, payload: T) => callback(payload);
@@ -63,7 +63,18 @@ const electronAPI: ElectronAPI = {
     sendThumbnailResult: (result) => ipcRenderer.send('thumbnail:rendered', result),
     thumbnailRendererReady: () => ipcRenderer.send('thumbnail:ready'),
 
+    // Updates
+    getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+    getUpdateStatus: () => ipcRenderer.invoke('updates:get-status'),
+    checkForUpdates: () => ipcRenderer.invoke('updates:check'),
+    downloadUpdate: () => ipcRenderer.invoke('updates:download'),
+    installUpdate: () => ipcRenderer.invoke('updates:install'),
+    getAutoCheckUpdates: () => ipcRenderer.invoke('updates:get-auto-check'),
+    setAutoCheckUpdates: (enabled) => ipcRenderer.invoke('updates:set-auto-check', enabled),
+    openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
     // Events
+    onUpdateStatus: (callback) => subscribe<UpdateStatus>('updates:status', callback),
     onModelsUpdated: (callback) => subscribe<void>('models-updated', () => callback()),
     onCollectionsUpdated: (callback) => subscribe<void>('collections-updated', () => callback()),
     onIndexProgress: (callback) => subscribe<IndexProgress>('index-progress', callback),

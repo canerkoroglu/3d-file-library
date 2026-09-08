@@ -63,6 +63,17 @@ npm run build:linux
 
 Installers are written to `release/`. CI builds all three on every push to `main`.
 
+### Releases and auto-update
+
+```bash
+npm version minor          # bumps package.json and creates the tag v1.x.0
+git push --follow-tags
+```
+
+The tag triggers the release workflow, which builds macOS, Windows and Linux installers and uploads them to a **draft** GitHub release together with the update manifests. Publish the draft and installed copies pick it up: the app checks on launch and every six hours (switchable in Settings), shows a banner, downloads on request and installs on restart.
+
+macOS can only self-update when the app is code-signed; the CI build is unsigned, so on macOS the banner links to the release page instead. Sign locally (`npm run build:mac` with an Apple identity) to get in-place updates there.
+
 ## Project structure
 
 ```
@@ -74,6 +85,7 @@ electron/
   library.ts           queries, FTS index maintenance, imports, duplicates
   fileWatcher.ts       chokidar watchers + folder reconciliation
   thumbnails.ts        render queue; the renderer draws 3D previews on request
+  updater.ts           electron-updater wiring (GitHub releases)
   slicers.ts           slicer discovery per platform and launching
   zipImport.ts         safe extraction of downloaded archives into a watched folder
   settings.ts          key/value preferences stored in the database

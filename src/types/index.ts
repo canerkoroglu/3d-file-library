@@ -142,6 +142,25 @@ export interface ZipImportResult {
     error?: string;
 }
 
+export type UpdateState = 'unsupported' | 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
+
+export interface UpdateStatus {
+    state: UpdateState;
+    currentVersion: string;
+    /** Version offered by the update server, when known. */
+    version?: string;
+    releaseNotes?: string;
+    releaseDate?: string;
+    /** Link to the release page, for platforms that cannot install in place. */
+    releaseUrl?: string;
+    progress?: { percent: number; transferred: number; total: number; bytesPerSecond: number };
+    /** Explanation or error text for the user. */
+    message?: string;
+    checkedAt?: string;
+    /** True when the platform cannot apply updates in place (unsigned macOS build). */
+    manualInstall?: boolean;
+}
+
 export interface IndexProgress {
     queued: number;
     active: number;
@@ -229,7 +248,18 @@ export interface ElectronAPI {
     sendThumbnailResult: (result: ThumbnailRenderResult) => void;
     thumbnailRendererReady: () => void;
 
+    // Updates
+    getAppVersion: () => Promise<string>;
+    getUpdateStatus: () => Promise<UpdateStatus>;
+    checkForUpdates: () => Promise<UpdateStatus>;
+    downloadUpdate: () => Promise<void>;
+    installUpdate: () => Promise<void>;
+    getAutoCheckUpdates: () => Promise<boolean>;
+    setAutoCheckUpdates: (enabled: boolean) => Promise<void>;
+    openExternal: (url: string) => Promise<void>;
+
     // Events (each returns an unsubscribe function)
+    onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void;
     onModelsUpdated: (callback: () => void) => () => void;
     onCollectionsUpdated: (callback: () => void) => () => void;
     onIndexProgress: (callback: (progress: IndexProgress) => void) => () => void;

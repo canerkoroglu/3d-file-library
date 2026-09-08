@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
+import { BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { getDatabase } from './database';
@@ -24,6 +24,7 @@ import { dequeueModel, enqueueAll, enqueueModel, getProgress } from './indexer';
 import { cancelThumbnailRender, requestThumbnailRender, saveThumbnailFromBase64 } from './thumbnails';
 import { addCustomSlicer, listSlicers, openInSlicer, removeCustomSlicer, setDefaultSlicer } from './slicers';
 import { importZipFiles } from './zipImport';
+import { APP_VERSION, checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, isAutoCheckEnabled, setAutoCheckEnabled } from './updater';
 import type { Collection, FilterOptions, Model, SourceMetadata, Tag, ZipImportRequest } from '../src/types';
 
 type Handler<T> = (event: IpcMainInvokeEvent, ...args: any[]) => Promise<T> | T;
@@ -284,5 +285,19 @@ export function setupIpcHandlers(): void {
         shell.showItemInFolder(filePath);
     });
 
-    handle('get-app-version', () => app.getVersion());
+    handle('get-app-version', () => APP_VERSION);
+
+    handle('open-external', async (_event, url: string) => {
+        if (!/^https:\/\//i.test(url)) throw new Error('Only https links can be opened');
+        await shell.openExternal(url);
+    });
+
+    // ============ Updates ============
+
+    handle('updates:get-status', () => getUpdateStatus());
+    handle('updates:check', () => checkForUpdates());
+    handle('updates:download', () => downloadUpdate());
+    handle('updates:install', () => installUpdate());
+    handle('updates:get-auto-check', () => isAutoCheckEnabled());
+    handle('updates:set-auto-check', (_event, enabled: boolean) => setAutoCheckEnabled(Boolean(enabled)));
 }

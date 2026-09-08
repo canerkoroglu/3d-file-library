@@ -4,7 +4,8 @@ import electron from 'vite-plugin-electron';
 import renderer from 'vite-plugin-electron-renderer';
 import path from 'path';
 
-const NATIVE_MODULES = ['better-sqlite3', 'sharp'];
+// Native modules and electron-updater (CommonJS with dynamic requires) are loaded from node_modules at runtime.
+const NATIVE_MODULES = ['better-sqlite3', 'sharp', 'electron-updater'];
 
 // https://vitejs.dev/config/
 export default defineConfig({

@@ -10,6 +10,7 @@ import type {
     SortBy,
     SortOrder,
     Tag,
+    UpdateStatus,
 } from '../types';
 
 type Theme = 'dark' | 'light' | 'system';
@@ -73,6 +74,9 @@ interface AppState {
     libraryStats: LibraryStats | null;
     slicers: Slicer[];
     importZipDialog: { open: boolean; zipPaths: string[] };
+    updateStatus: UpdateStatus | null;
+    /** Version the user dismissed the update banner for. */
+    dismissedUpdateVersion: string | null;
     theme: Theme;
 
     // Actions
@@ -93,6 +97,11 @@ interface AppState {
     setIndexProgress: (progress: IndexProgress | null) => void;
     openImportZip: (zipPaths?: string[]) => void;
     closeImportZip: () => void;
+    setUpdateStatus: (status: UpdateStatus | null) => void;
+    dismissUpdateBanner: () => void;
+    checkForUpdates: () => Promise<void>;
+    downloadUpdate: () => Promise<void>;
+    installUpdate: () => Promise<void>;
 
     // Selection
     setSelectionMode: (on: boolean) => void;
@@ -167,6 +176,8 @@ export const useStore = create<AppState>((set, get) => ({
     libraryStats: null,
     slicers: [],
     importZipDialog: { open: false, zipPaths: [] },
+    updateStatus: null,
+    dismissedUpdateVersion: null,
     theme: readStoredTheme(),
 
     setTheme: (theme) => {
@@ -237,6 +248,29 @@ export const useStore = create<AppState>((set, get) => ({
             },
         })),
     closeImportZip: () => set({ importZipDialog: { open: false, zipPaths: [] } }),
+    setUpdateStatus: (status) => set({ updateStatus: status }),
+    dismissUpdateBanner: () => set((state) => ({ dismissedUpdateVersion: state.updateStatus?.version ?? null })),
+    checkForUpdates: async () => {
+        try {
+            set({ updateStatus: await window.electronAPI.checkForUpdates() });
+        } catch (error) {
+            console.error('Failed to check for updates:', error);
+        }
+    },
+    downloadUpdate: async () => {
+        try {
+            await window.electronAPI.downloadUpdate();
+        } catch (error) {
+            console.error('Failed to download update:', error);
+        }
+    },
+    installUpdate: async () => {
+        try {
+            await window.electronAPI.installUpdate();
+        } catch (error) {
+            console.error('Failed to install update:', error);
+        }
+    },
 
     setSelectionMode: (on) => set(on ? { selectionMode: true } : { selectionMode: false, selectedModels: new Set<number>(), selectionAnchor: null }),
     toggleModelSelection: (id, index) =>

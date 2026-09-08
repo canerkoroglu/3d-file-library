@@ -8,6 +8,7 @@ import { setupIpcHandlers } from './ipcHandlers';
 import { initializeWatchers, stopAllWatchers } from './fileWatcher';
 import { enqueueAll, startIndexer, stopIndexer } from './indexer';
 import { getThumbnailQueueSize, registerThumbnailIpc, requestThumbnailRender, setThumbnailWindow, stopThumbnailQueue } from './thumbnails';
+import { initUpdater } from './updater';
 import type { FileType, IndexProgress } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -120,6 +121,8 @@ app.whenReady().then(async () => {
         },
         getThumbnailQueueSize,
     });
+
+    initUpdater((status) => sendToRenderer('updates:status', status));
 
     // Reconcile watched folders with disk, then make sure everything is analysed.
     await initializeWatchers();
