@@ -1,154 +1,141 @@
-import { app, BrowserWindow, ipcMain, protocol, net } from 'electron';
+import { app, BrowserWindow, net, protocol } from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { closeDatabase, getDatabase, initDatabase } from './database';
+import { getDatabasePath, getThumbnailDir, isInsideDir, setUserDataDir } from './paths';
+import { libraryEvents, notifyModelsUpdated } from './library';
 import { setupIpcHandlers } from './ipcHandlers';
-import { initDatabase } from './database';
 import { initializeWatchers, stopAllWatchers } from './fileWatcher';
+import { enqueueAll, startIndexer, stopIndexer } from './indexer';
+import { getThumbnailQueueSize, registerThumbnailIpc, requestThumbnailRender, setThumbnailWindow } from './thumbnails';
+import type { FileType, IndexProgress } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MODELS_UPDATED_DEBOUNCE_MS = 300;
 
-// Disable GPU acceleration removed to fix WebGL crashes
-// app.disableHardwareAcceleration();
-
-// Global error handlers
-process.on('uncaughtException', (error) => {
-    console.error('CRITICAL: Uncaught Exception:', error);
-    // In a production app, you might want to show a dialog or write to a log file here
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
-});
+process.on('uncaughtException', (error) => console.error('CRITICAL: Uncaught exception:', error));
+process.on('unhandledRejection', (reason) => console.error('CRITICAL: Unhandled rejection:', reason));
 
 let mainWindow: BrowserWindow | null = null;
 
-const createWindow = () => {
+function sendToRenderer(channel: string, payload?: unknown): void {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
+
+// Coalesce bursts of library changes (folder syncs, indexing) into one renderer refresh.
+let modelsUpdatedTimer: NodeJS.Timeout | null = null;
+libraryEvents.on('models-updated', () => {
+    if (modelsUpdatedTimer) return;
+    modelsUpdatedTimer = setTimeout(() => {
+        modelsUpdatedTimer = null;
+        sendToRenderer('models-updated');
+    }, MODELS_UPDATED_DEBOUNCE_MS);
+});
+libraryEvents.on('collections-updated', () => sendToRenderer('collections-updated'));
+
+function createWindow(): void {
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 768,
         minWidth: 1024,
         minHeight: 600,
         backgroundColor: '#1a1a1a',
-        resizable: true,
-        movable: true,
-        useContentSize: true, // Forces window to respect web content size if possible, but mainly ensures robust sizing
+        titleBarStyle: 'hiddenInset',
         webPreferences: {
-            preload: (() => {
-                const p = path.join(__dirname, 'preload.js');
-                console.log('Loading preload script from:', p);
-                return p;
-            })(),
+            preload: path.join(__dirname, 'preload.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
         },
-        titleBarStyle: 'hiddenInset',
-        show: true, // Show immediately to debug sizing issues
     });
 
-    // Explicitly set bounds to ensure it's not 0 height
-    mainWindow.setBounds({ width: 1280, height: 768 });
-
-    // Load the app
     if (process.env.VITE_DEV_SERVER_URL) {
-        mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-        // Open DevTools in development
-        mainWindow.webContents.openDevTools();
+        void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
     } else {
-        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+        void mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
     }
 
-    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
-        console.error('Failed to load window:', errorCode, errorDescription);
+    mainWindow.webContents.on('did-fail-load', (_event, code, description) => {
+        console.error('Failed to load window:', code, description);
     });
 
-    mainWindow.webContents.on('console-message', (_event, _level, message, line, sourceId) => {
-        console.log(`[Renderer]: ${message} (${sourceId}:${line})`);
-    });
+    if (process.env.VITE_DEV_SERVER_URL) {
+        // Surface renderer errors in the terminal while developing.
+        mainWindow.webContents.on('console-message', (event) => {
+            if (event.level === 'error' || event.level === 'warning') {
+                console.log(`[Renderer:${event.level}] ${event.message} (${event.sourceId}:${event.lineNumber})`);
+            }
+        });
+    }
 
     mainWindow.on('closed', () => {
         mainWindow = null;
+        setThumbnailWindow(null);
     });
-};
 
-// Register privileges for custom protocol
+    setThumbnailWindow(mainWindow);
+}
+
+/** Serves thumbnails to the renderer. Only files inside the thumbnail directory are allowed. */
+function registerMediaProtocol(): void {
+    protocol.handle('media', (request) => {
+        const url = new URL(request.url);
+        let decoded = decodeURIComponent(url.pathname);
+        // On Windows the pathname looks like "/C:/Users/..."; strip the leading slash.
+        if (/^\/[a-zA-Z]:/.test(decoded)) decoded = decoded.slice(1);
+        const filePath = path.normalize(decoded);
+
+        if (!isInsideDir(getThumbnailDir(), filePath)) {
+            return new Response('Forbidden', { status: 403 });
+        }
+        return net.fetch(pathToFileURL(filePath).toString());
+    });
+}
+
+// Lets tests and secondary profiles run against a separate library (e.g. MODELIST_USER_DATA=/tmp/profile).
+if (process.env.MODELIST_USER_DATA) {
+    app.setPath('userData', path.resolve(process.env.MODELIST_USER_DATA));
+}
+
 protocol.registerSchemesAsPrivileged([
-    { scheme: 'media', privileges: { secure: true, standard: true, supportFetchAPI: true, bypassCSP: true } }
+    { scheme: 'media', privileges: { secure: true, standard: true, supportFetchAPI: true, bypassCSP: true } },
 ]);
 
-// App lifecycle
 app.whenReady().then(async () => {
-    // Initialize database
-    await initDatabase();
-
-    // Register custom protocol for local files
-    protocol.handle('media', (request) => {
-        // Remove scheme and any number of slashes
-        // Example: media:///C:/Users/... -> C:/Users/...
-        let url = request.url;
-        const queryIndex = url.indexOf('?');
-        if (queryIndex !== -1) {
-            url = url.slice(0, queryIndex);
-        }
-        let rawPath = url.replace(/^media:\/+/, '');
-
-        // Decode URI component (handle spaces etc)
-        let decodedPath = decodeURIComponent(rawPath);
-
-        // Normalize slashes (Windows backslashes to forward slashes)
-        let normalizedPath = decodedPath.replace(/\\/g, '/');
-
-        // Fix missing drive letter colon? (e.g. c/Users -> c:/Users)
-        if (/^[a-zA-Z]\//.test(normalizedPath)) {
-            normalizedPath = normalizedPath.charAt(0) + ':' + normalizedPath.slice(1);
-        }
-
-        // Convert path to proper File URL (handles encoding of spaces etc)
-        // pathToFileURL does NOT like forward slashes on Windows if it thinks it's a file path?
-        // Actually pathToFileURL handles both usually, but let's be safe.
-        // It produces "file:///C:/path%20with%20spaces"
-        const fileUrl = pathToFileURL(normalizedPath).toString();
-
-        console.log('--- MEDIA REQUEST ---');
-        console.log('Original URL:', request.url);
-        console.log('Decoded Path:', decodedPath);
-        console.log('Normalized Path:', normalizedPath);
-        console.log('Fetching (Encoded):', fileUrl);
-        console.log('---------------------');
-
-        return net.fetch(fileUrl).catch(e => {
-            console.error('Failed to fetch local file:', fileUrl, e);
-            throw e;
-        });
-    });
-
-    // Set up IPC handlers
-    setupIpcHandlers(ipcMain, mainWindow);
-
-    // Create window
+    setUserDataDir(app.getPath('userData'));
+    initDatabase(getDatabasePath());
+    registerMediaProtocol();
+    registerThumbnailIpc();
+    setupIpcHandlers();
     createWindow();
 
-    // Initialize file watchers after window is created
-    setTimeout(() => {
-        initializeWatchers(mainWindow);
-    }, 1000); // Small delay to ensure everything is ready
+    startIndexer({
+        onProgress: (progress: IndexProgress) => sendToRenderer('index-progress', progress),
+        onModelIndexed: (modelId) => {
+            const row = getDatabase().prepare('SELECT filepath, file_type FROM models WHERE id = ?').get(modelId) as
+                | { filepath: string; file_type: FileType }
+                | undefined;
+            if (row) requestThumbnailRender(modelId, row.filepath, row.file_type);
+            notifyModelsUpdated();
+        },
+        getThumbnailQueueSize,
+    });
+
+    // Reconcile watched folders with disk, then make sure everything is analysed.
+    await initializeWatchers();
+    enqueueAll();
 
     app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
-        }
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
 });
 
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit();
-    }
+    if (process.platform !== 'darwin') app.quit();
 });
 
-// Graceful shutdown
 app.on('before-quit', async () => {
-    // Stop all file watchers
+    stopIndexer();
     await stopAllWatchers();
+    closeDatabase();
 });
-
-export { mainWindow };

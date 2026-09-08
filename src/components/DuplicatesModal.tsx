@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useStore } from '../store/store';
 import { X, Trash2, AlertTriangle, File } from 'lucide-react';
 import { format } from 'date-fns';
+import { thumbnailUrl } from '../lib/format';
 
 const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -85,9 +86,9 @@ const DuplicatesModal = () => {
                                     {group.models.map((model) => (
                                         <div key={model.id} className="p-4 flex items-center justify-between group hover:bg-primary-hover transition-colors">
                                             <div className="flex items-center gap-4 min-w-0 flex-1">
-                                                {model.thumbnailPath ? (
+                                                {thumbnailUrl(model) ? (
                                                     <img
-                                                        src={`file://${model.thumbnailPath}`}
+                                                        src={thumbnailUrl(model)!}
                                                         alt={model.filename}
                                                         className="w-10 h-10 rounded object-cover bg-primary-card"
                                                     />
@@ -134,9 +135,10 @@ const DuplicatesModal = () => {
                 {/* Footer */}
                 <div className="h-16 border-t border-accent-gray flex items-center justify-between px-6 bg-primary-hover flex-shrink-0 rounded-b-xl text-sm">
                     <div className="text-text-secondary">
-                        {duplicateGroups.length > 0 && (
-                            <span>
-                                Keep one file from each group to reclaim space.
+                        {duplicateGroups.length > 0 && <span>Keep one file from each group to reclaim space. </span>}
+                        {wastedSpace && wastedSpace.unhashedCount > 0 && (
+                            <span className="text-yellow-500">
+                                {wastedSpace.unhashedCount} file{wastedSpace.unhashedCount === 1 ? '' : 's'} still being indexed and not compared yet.
                             </span>
                         )}
                     </div>

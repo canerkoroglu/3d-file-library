@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # CI has no signing certificates; build unsigned artifacts instead of failing.
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vite build
+      - run: npx electron-builder --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modelist-${{ matrix.os }}
+          path: |
+            release/**/*.dmg
+            release/**/*.exe
+            release/**/*.AppImage
+          if-no-files-found: ignore

@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Folder, FolderOpen, Plus, Settings, Inbox, Copy, X, RefreshCw, Edit2 } from 'lucide-react';
+import { Folder, FolderOpen, FolderX, Plus, Settings, Inbox, Copy, X, RefreshCw, Edit2, Loader2, FileX } from 'lucide-react';
 import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
 export default function Sidebar() {
-    const { collections, selectedCollection, setSelectedCollection, openDuplicatesModal, openSettings } = useStore();
+    const { collections, selectedCollection, setSelectedCollection, openDuplicatesModal, openSettings, indexProgress, libraryStats, setSearchQuery, searchQuery } = useStore();
+    const missingCount = libraryStats?.missing ?? 0;
+    const isShowingMissing = searchQuery.trim().toLowerCase() === 'is:missing';
 
     const watchedFolders = collections.filter(c => c.type === 'watched');
     const userCollections = collections.filter(c => c.type === 'collection');
@@ -284,10 +286,10 @@ export default function Sidebar() {
                                     key={folder.id}
                                     onClick={() => setSelectedCollection(folder.id)}
                                     className={`sidebar-item w-full group cursor-pointer ${selectedCollection === folder.id ? 'active' : 'inactive'}`}
-                                    title={folder.folderPath}
+                                    title={folder.isOnline === false ? `${folder.folderPath} (not available: drive disconnected or folder moved)` : folder.folderPath}
                                 >
-                                    <FolderOpen size={18} />
-                                    <span className="truncate flex-1 text-left">{folder.name}</span>
+                                    {folder.isOnline === false ? <FolderX size={18} className="text-red-400" /> : <FolderOpen size={18} />}
+                                    <span className={`truncate flex-1 text-left ${folder.isOnline === false ? 'text-text-secondary' : ''}`}>{folder.name}</span>
                                     <button
                                         onClick={(e) => handleRemoveWatchedFolder(folder.id, e)}
                                         className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
@@ -314,7 +316,41 @@ export default function Sidebar() {
                     <Copy size={18} />
                     <span>Find Duplicates</span>
                 </button>
+                {missingCount > 0 && (
+                    <button
+                        onClick={() => setSearchQuery(isShowingMissing ? '' : 'is:missing')}
+                        className={`sidebar-item w-full ${isShowingMissing ? 'active' : 'inactive'}`}
+                        title="Files that cannot be found on disk. Their tags and notes are kept until you forget them in Settings."
+                    >
+                        <FileX size={18} className="text-red-400" />
+                        <span className="flex-1 text-left">Missing Files</span>
+                        <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-semibold tabular-nums">{missingCount}</span>
+                    </button>
+                )}
             </div>
+
+            {/* Indexing status */}
+            {indexProgress?.isRunning && (
+                <div className="px-4 py-2 border-t border-accent-gray flex-shrink-0">
+                    <div className="flex items-center justify-between text-[11px] text-text-secondary mb-1">
+                        <span className="flex items-center gap-1.5">
+                            <Loader2 size={11} className="animate-spin" /> Indexing
+                        </span>
+                        <span className="tabular-nums">
+                            {indexProgress.completed + indexProgress.failed} / {indexProgress.total}
+                        </span>
+                    </div>
+                    <div className="h-1 bg-primary-bg rounded overflow-hidden">
+                        <div
+                            className="h-full bg-accent-blue transition-all duration-300"
+                            style={{ width: `${indexProgress.total ? ((indexProgress.completed + indexProgress.failed) / indexProgress.total) * 100 : 0}%` }}
+                        />
+                    </div>
+                    {indexProgress.thumbnailsQueued > 0 && (
+                        <div className="text-[10px] text-text-secondary mt-1">{indexProgress.thumbnailsQueued} thumbnails to render</div>
+                    )}
+                </div>
+            )}
 
             {/* Bottom section - Settings */}
             <div className="p-3 border-t border-accent-gray flex-shrink-0">

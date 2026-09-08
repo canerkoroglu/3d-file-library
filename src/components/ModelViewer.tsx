@@ -1,116 +1,118 @@
-import { useRef, useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Stage } from '@react-three/drei';
-import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus } from 'lucide-react';
+import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus, Pencil, FileText, ChevronDown, ChevronRight, AlertTriangle, FileX } from 'lucide-react';
 import { useStore } from '../store/store';
 import GenericModel from './GenericModel';
+import MetadataEditor from './MetadataEditor';
+import { formatDimensions, formatFileSize, formatTriangles, formatVolume } from '../lib/format';
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div>
+            <div className="text-text-secondary text-xs mb-1">{label}</div>
+            <div className="text-text-primary bg-primary-bg px-3 py-2 rounded-lg text-sm break-words">{children}</div>
+        </div>
+    );
+}
 
 export default function ModelViewer() {
-    const { selectedModel, closeViewer, tags, addTagToModel, removeTagFromModel } = useStore();
+    const { selectedModel, closeViewer, tags, addTagToModel, removeTagFromModel, collections, loadModels } = useStore();
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    // Renaming state
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState('');
+    const [isCreatingTag, setIsCreatingTag] = useState(false);
+    const [newTagName, setNewTagName] = useState('');
+    const [newTagColor, setNewTagColor] = useState('#3b82f6');
+    const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+    const [readme, setReadme] = useState<string | null>(null);
+    const [readmeOpen, setReadmeOpen] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [captureState, setCaptureState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-    // Reset rename state when model changes
+    const modelId = selectedModel?.id;
+
     useEffect(() => {
         setIsRenaming(false);
         setRenameValue('');
-    }, [selectedModel?.id]);
+        setReadme(null);
+        setReadmeOpen(false);
+        setLoadError(null);
+        setCaptureState('idle');
+        if (modelId && selectedModel?.hasReadme) {
+            void window.electronAPI.getModelReadme(modelId).then(setReadme);
+        }
+    }, [modelId, selectedModel?.hasReadme]);
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isEditingMetadata) closeViewer();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [closeViewer, isEditingMetadata]);
+
+    const handleLoadError = useCallback((message: string) => setLoadError(message), []);
+
+    if (!selectedModel) return null;
 
     const handleRename = async () => {
-        if (!selectedModel || !renameValue.trim()) return;
-
+        if (!renameValue.trim() || renameValue === selectedModel.filename) {
+            setIsRenaming(false);
+            return;
+        }
         try {
             await window.electronAPI.renameModelFile(selectedModel.id, renameValue);
             setIsRenaming(false);
         } catch (error) {
             console.error('Failed to rename file:', error);
-            // alert('Failed to rename file. Check console for details.');
         }
-    };
-
-    if (!selectedModel) return null;
-
-    const formatFileSize = (bytes: number): string => {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     };
 
     const handleToggleTag = async (tagId: number) => {
-        const hasTag = selectedModel.tags?.some(t => t.id === tagId);
-        if (hasTag) {
-            await removeTagFromModel(selectedModel.id, tagId);
-        } else {
-            await addTagToModel(selectedModel.id, tagId);
-        }
+        const hasTag = selectedModel.tags.some((t) => t.id === tagId);
+        if (hasTag) await removeTagFromModel(selectedModel.id, tagId);
+        else await addTagToModel(selectedModel.id, tagId);
     };
-
-    // Tag Creation State
-    const [isCreatingTag, setIsCreatingTag] = useState(false);
-    const [newTagName, setNewTagName] = useState('');
-    const [newTagColor, setNewTagColor] = useState('#3b82f6');
 
     const handleCreateTag = async () => {
         if (!newTagName.trim()) return;
-        try {
-            const { createTag } = useStore.getState();
-            await createTag(newTagName, newTagColor);
-
-            // Should verify if we need to manually assign it or if just creating it is enough
-            // For now, let's just create it. The store will reload tags.
-
-            setNewTagName('');
-            setIsCreatingTag(false);
-            // newTagColor remains as last used, or reset if desired
-        } catch (error) {
-            console.error('Failed to create tag:', error);
-        }
+        await useStore.getState().createTag(newTagName, newTagColor);
+        setNewTagName('');
+        setIsCreatingTag(false);
     };
 
     const handleCaptureThumbnail = async () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-
+        setCaptureState('saving');
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const dataUrl = canvas.toDataURL('image/png');
         try {
-            // Wait for next frame to ensure scene is fully rendered
-            await new Promise(resolve => requestAnimationFrame(() => {
-                requestAnimationFrame(resolve);
-            }));
-
-            // Convert canvas to blob
-            canvas.toBlob(async (blob) => {
-                if (!blob) return;
-
-                // Convert blob to base64
-                const reader = new FileReader();
-                reader.onloadend = async () => {
-                    const base64data = reader.result as string;
-                    const base64Image = base64data.split(',')[1]; // Remove data:image/png;base64, prefix
-
-                    // Send to main process to save
-                    console.log('Sending thumbnail to main process for model:', selectedModel.id);
-                    await window.electronAPI.captureThumbnail(selectedModel.id, base64Image);
-                    console.log('Thumbnail saved, reloading models...');
-
-                    // Reload models to show updated thumbnail
-                    const { loadModels, closeViewer } = useStore.getState();
-                    await loadModels();
-
-                    // Close viewer to force grid refresh
-                    closeViewer();
-
-                    // Show success feedback
-                    console.log('Thumbnail captured and updated successfully! Models reloaded.');
-                };
-                reader.readAsDataURL(blob);
-            }, 'image/png');
+            await window.electronAPI.captureThumbnail(selectedModel.id, dataUrl.split(',')[1]);
+            setCaptureState('saved');
+            setTimeout(() => setCaptureState('idle'), 1500);
         } catch (error) {
             console.error('Failed to capture thumbnail:', error);
+            setCaptureState('idle');
         }
     };
+
+    const toggleCollection = async (collectionId: number, checked: boolean) => {
+        try {
+            if (checked) await window.electronAPI.addModelToCollection(selectedModel.id, collectionId);
+            else await window.electronAPI.removeModelFromCollection(selectedModel.id, collectionId);
+            await loadModels();
+        } catch (error) {
+            console.error('Failed to update collection:', error);
+        }
+    };
+
+    const meta = selectedModel.sourceMetadata;
+    const print = selectedModel.printMeta;
+    const userCollections = collections.filter((c) => c.type === 'collection');
+    const missing = Boolean(selectedModel.missingSince);
 
     return (
         <div
@@ -123,33 +125,42 @@ export default function ModelViewer() {
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-accent-gray flex-shrink-0 bg-primary-card">
                     <div className="flex-1 min-w-0">
-                        <div className="group flex items-start justify-between gap-2">
-                            <h2 className="text-lg font-semibold truncate">{selectedModel.displayName || selectedModel.filename}</h2>
-                        </div>
-                        <p className="text-sm text-text-secondary mt-0.5">
-                            {formatFileSize(selectedModel.fileSize)} • {selectedModel.fileType.toUpperCase()}
+                        <h2 className="text-lg font-semibold truncate">{selectedModel.displayName || selectedModel.filename}</h2>
+                        <p className="text-sm text-text-secondary mt-0.5 truncate">
+                            {formatFileSize(selectedModel.fileSize)} · {selectedModel.fileType.toUpperCase()}
+                            {selectedModel.triangleCount !== undefined && ` · ${formatTriangles(selectedModel.triangleCount)}`}
+                            {selectedModel.bbox && ` · ${formatDimensions(selectedModel.bbox)}`}
                         </p>
                     </div>
-                    <button
-                        onClick={closeViewer}
-                        className="ml-4 p-2 hover:bg-primary-hover rounded-lg transition-colors flex-shrink-0"
-                        title="Close (Esc)"
-                    >
+                    <button onClick={closeViewer} className="ml-4 p-2 hover:bg-primary-hover rounded-lg transition-colors flex-shrink-0" title="Close (Esc)">
                         <X size={20} />
                     </button>
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 flex overflow-hidden min-h-0">
-                    {/* 3D Viewer */}
+                    {/* 3D viewer */}
                     <div className="flex-1 bg-primary-bg relative min-w-0">
+                        {missing ? (
+                            <div className="absolute inset-0 flex items-center justify-center p-8">
+                                <div className="max-w-md text-center space-y-3">
+                                    <div className="w-16 h-16 mx-auto rounded-2xl bg-primary-card flex items-center justify-center">
+                                        <FileX size={32} className="text-red-400" />
+                                    </div>
+                                    <div className="text-text-primary font-medium">File not available</div>
+                                    <div className="text-sm text-text-secondary">
+                                        Not found since {new Date(selectedModel.missingSince!).toLocaleString()}. If it lives on an external drive,
+                                        plug the drive back in and it will reappear automatically. Tags, notes and collections are kept.
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
                         <Canvas
+                            ref={canvasRef}
                             shadows
-                            camera={{ position: [0, 0, 5], fov: 50 }}
+                            camera={{ position: [6, 5, 7], fov: 45 }}
                             gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
                         >
                             <Stage environment="city" intensity={0.6} adjustCamera={false}>
-                                {/* Grid */}
                                 <Grid
                                     args={[20, 20]}
                                     cellSize={0.5}
@@ -163,164 +174,188 @@ export default function ModelViewer() {
                                     followCamera={false}
                                     position={[0, -0.01, 0]}
                                 />
-
-                                {/* 3D Model */}
-                                {selectedModel && (
-                                    <GenericModel
-                                        key={selectedModel.id} // Re-mount when model changes
-                                        filepath={selectedModel.filepath}
-                                        fileType={selectedModel.fileType}
-                                    />
-                                )}
+                                <GenericModel
+                                    key={selectedModel.id}
+                                    filepath={selectedModel.filepath}
+                                    fileType={selectedModel.fileType}
+                                    onError={handleLoadError}
+                                />
                             </Stage>
-                            <OrbitControls
-                                enableDamping
-                                dampingFactor={0.05}
-                                minDistance={1}
-                                maxDistance={20}
-                                makeDefault
-                                autoRotate
-                                autoRotateSpeed={0.5}
-                            />
+                            <OrbitControls enableDamping dampingFactor={0.05} minDistance={1} maxDistance={30} makeDefault autoRotate autoRotateSpeed={0.5} />
                         </Canvas>
+                        )}
 
-                        {/* Capture Thumbnail Button */}
+                        {loadError && (
+                            <div className="absolute inset-x-0 top-4 flex justify-center pointer-events-none">
+                                <div className="flex items-center gap-2 bg-red-500/20 border border-red-500/40 text-red-200 text-sm px-4 py-2 rounded-lg">
+                                    <AlertTriangle size={16} />
+                                    {loadError}
+                                </div>
+                            </div>
+                        )}
+
+                        {!missing && (
                         <button
                             onClick={handleCaptureThumbnail}
-                            className="absolute top-4 right-4 glass px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors flex items-center gap-2"
-                            title="Capture current view as thumbnail"
+                            disabled={captureState === 'saving'}
+                            className="absolute top-4 right-4 glass px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors flex items-center gap-2 disabled:opacity-60"
+                            title="Use the current view as the thumbnail"
                         >
                             <Camera size={18} />
-                            Capture Thumbnail
+                            {captureState === 'saved' ? 'Saved' : captureState === 'saving' ? 'Saving…' : 'Capture Thumbnail'}
                         </button>
+                        )}
                     </div>
 
                     {/* Side panel */}
                     <div className="w-80 bg-primary-card border-l border-accent-gray flex flex-col overflow-hidden flex-shrink-0">
                         <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                            {/* Model info */}
-                            <div>
-                                <h3 className="text-sm font-semibold mb-3 text-text-primary">Model Information</h3>
-                                <div className="space-y-3 text-sm">
-                                    {/* ... existing info fields ... */}
+                            {/* File */}
+                            <section>
+                                <h3 className="text-sm font-semibold mb-3 text-text-primary">File</h3>
+                                <div className="space-y-3">
                                     <div>
                                         <div className="text-text-secondary text-xs mb-1">Filename</div>
                                         <input
-                                            className="w-full bg-primary-bg text-text-primary px-3 py-2 rounded-lg border border-transparent focus:border-blue-500 focus:outline-none transition-colors"
+                                            className="w-full bg-primary-bg text-text-primary px-3 py-2 rounded-lg border border-transparent focus:border-blue-500 focus:outline-none transition-colors text-sm"
                                             value={isRenaming ? renameValue : selectedModel.filename}
                                             onChange={(e) => {
                                                 setIsRenaming(true);
                                                 setRenameValue(e.target.value);
                                             }}
-                                            onBlur={() => {
-                                                if (isRenaming) {
-                                                    handleRename();
-                                                }
-                                            }}
+                                            onBlur={() => isRenaming && handleRename()}
                                             onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.currentTarget.blur(); // Triggers onBlur
-                                                }
+                                                if (e.key === 'Enter') e.currentTarget.blur();
                                                 if (e.key === 'Escape') {
+                                                    e.stopPropagation();
                                                     setIsRenaming(false);
                                                     setRenameValue('');
                                                 }
                                             }}
-                                            title="Click to rename"
+                                            title={missing ? 'Cannot rename a missing file' : 'Click to rename'}
+                                            readOnly={missing}
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <div className="text-text-secondary text-xs mb-1">Size</div>
-                                            <div className="text-text-primary bg-primary-bg px-3 py-2 rounded-lg">{formatFileSize(selectedModel.fileSize)}</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-text-secondary text-xs mb-1">Type</div>
-                                            <div className="text-text-primary bg-primary-bg px-3 py-2 rounded-lg uppercase">{selectedModel.fileType}</div>
-                                        </div>
+                                        <Field label="Size">{formatFileSize(selectedModel.fileSize)}</Field>
+                                        <Field label="Type"><span className="uppercase">{selectedModel.fileType}</span></Field>
                                     </div>
-
-                                    {/* Collection Assignment */}
-                                    <div>
-                                        <div className="text-text-secondary text-xs mb-2">Collections</div>
-                                        <div className="bg-primary-bg rounded-lg border border-accent-gray p-2 max-h-40 overflow-y-auto space-y-1">
-                                            {useStore.getState().collections
-                                                .filter(c => c.type === 'collection')
-                                                .map(c => {
-                                                    const isChecked = selectedModel.collectionIds?.includes(c.id);
-                                                    return (
-                                                        <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-primary-hover rounded cursor-pointer group select-none">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={isChecked || false}
-                                                                className="w-4 h-4 rounded border-gray-600 bg-primary-card text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 accent-blue-500"
-                                                                onChange={async (e) => {
-                                                                    const checked = e.target.checked;
-                                                                    // console.log(`Toggling collection ${c.name} (ID: ${c.id}) to ${checked}`);
-
-                                                                    // Optimistic UI update could be added here, but for now we rely on store refresh
-                                                                    try {
-                                                                        if (checked) {
-                                                                            await window.electronAPI.addModelToCollection(selectedModel.id, c.id);
-                                                                        } else {
-                                                                            await window.electronAPI.removeModelFromCollection(selectedModel.id, c.id);
-                                                                        }
-                                                                        // Refresh model data
-                                                                        const { loadModels } = useStore.getState();
-                                                                        await loadModels();
-                                                                    } catch (error) {
-                                                                        console.error('Failed to update collection:', error);
-                                                                    }
-                                                                }}
-                                                            />
-                                                            <span className="text-text-primary text-sm">{c.name}</span>
-                                                        </label>
-                                                    );
-                                                })
-                                            }
-                                            {useStore.getState().collections.filter(c => c.type === 'collection').length === 0 && (
-                                                <div className="text-text-secondary text-xs text-center py-2 italic">
-                                                    No collections created yet.
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <div className="text-text-secondary text-xs mb-1">Location</div>
-                                        <div className="text-text-primary text-xs break-all bg-primary-bg px-3 py-2 rounded-lg font-mono">
-                                            {selectedModel.filepath}
-                                        </div>
-                                    </div>
+                                    <Field label="Location"><span className="text-xs font-mono break-all">{selectedModel.filepath}</span></Field>
                                 </div>
-                            </div>
+                            </section>
+
+                            {/* Geometry */}
+                            {(selectedModel.bbox || selectedModel.triangleCount !== undefined) && (
+                                <section>
+                                    <h3 className="text-sm font-semibold mb-3 text-text-primary">Geometry</h3>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {selectedModel.bbox && <Field label="Dimensions">{formatDimensions(selectedModel.bbox)}</Field>}
+                                        {selectedModel.triangleCount !== undefined && <Field label="Triangles">{selectedModel.triangleCount.toLocaleString()}</Field>}
+                                        {selectedModel.volumeMm3 !== undefined && <Field label="Volume">{formatVolume(selectedModel.volumeMm3)}</Field>}
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* Print settings from slicer project */}
+                            {print && (print.slicer || print.printerModel || print.filamentTypes?.length || print.layerHeight || print.title || print.designer) && (
+                                <section>
+                                    <h3 className="text-sm font-semibold mb-3 text-text-primary">Project</h3>
+                                    <div className="space-y-3">
+                                        {print.title && <Field label="Title">{print.title}</Field>}
+                                        {print.designer && <Field label="Designer">{print.designer}</Field>}
+                                        {print.description && <Field label="Description"><span className="text-xs whitespace-pre-wrap">{print.description}</span></Field>}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {print.slicer && <Field label="Slicer">{print.slicer}</Field>}
+                                            {print.printerModel && <Field label="Printer">{print.printerModel}</Field>}
+                                            {print.filamentTypes && print.filamentTypes.length > 0 && <Field label="Filament">{print.filamentTypes.join(', ')}</Field>}
+                                            {print.layerHeight !== undefined && !Number.isNaN(print.layerHeight) && <Field label="Layer height">{print.layerHeight} mm</Field>}
+                                        </div>
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* Source metadata */}
+                            <section>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-sm font-semibold text-text-primary">Source</h3>
+                                    <button onClick={() => setIsEditingMetadata(true)} className="text-xs text-accent-blue hover:underline flex items-center gap-1">
+                                        <Pencil size={12} /> Edit
+                                    </button>
+                                </div>
+                                {meta && (meta.source || meta.author || meta.license || meta.url || meta.notes) ? (
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {meta.source && <Field label="Site">{meta.source}</Field>}
+                                            {meta.author && <Field label="Author">{meta.author}</Field>}
+                                            {meta.license && <Field label="License">{meta.license}</Field>}
+                                        </div>
+                                        {meta.url && (
+                                            <Field label="URL">
+                                                <a href={meta.url} target="_blank" rel="noreferrer" className="text-accent-blue hover:underline text-xs break-all">{meta.url}</a>
+                                            </Field>
+                                        )}
+                                        {meta.notes && <Field label="Notes"><span className="text-xs whitespace-pre-wrap">{meta.notes}</span></Field>}
+                                    </div>
+                                ) : (
+                                    <div className="text-text-secondary text-xs italic">No source information yet.</div>
+                                )}
+                            </section>
+
+                            {/* README */}
+                            {selectedModel.hasReadme && (
+                                <section>
+                                    <button onClick={() => setReadmeOpen((v) => !v)} className="w-full flex items-center gap-2 text-sm font-semibold text-text-primary mb-2">
+                                        {readmeOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                        <FileText size={14} /> README
+                                    </button>
+                                    {readmeOpen && (
+                                        <pre className="text-xs text-text-primary bg-primary-bg rounded-lg p-3 whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-sans">
+                                            {readme ?? 'Loading…'}
+                                        </pre>
+                                    )}
+                                </section>
+                            )}
+
+                            {/* Collections */}
+                            <section>
+                                <h3 className="text-sm font-semibold mb-3 text-text-primary">Collections</h3>
+                                <div className="bg-primary-bg rounded-lg border border-accent-gray p-2 max-h-40 overflow-y-auto space-y-1">
+                                    {userCollections.map((c) => (
+                                        <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-primary-hover rounded cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedModel.collectionIds.includes(c.id)}
+                                                className="w-4 h-4 rounded accent-blue-500"
+                                                onChange={(e) => toggleCollection(c.id, e.target.checked)}
+                                            />
+                                            <span className="text-text-primary text-sm">{c.name}</span>
+                                        </label>
+                                    ))}
+                                    {userCollections.length === 0 && (
+                                        <div className="text-text-secondary text-xs text-center py-2 italic">No collections created yet.</div>
+                                    )}
+                                </div>
+                            </section>
 
                             {/* Tags */}
-                            <div>
+                            <section>
                                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-text-primary">
-                                    <TagIcon size={16} />
-                                    Tags
+                                    <TagIcon size={16} /> Tags
                                 </h3>
                                 <div className="flex flex-wrap gap-2">
                                     {tags.map((tag) => {
-                                        const isActive = selectedModel.tags?.some(t => t.id === tag.id);
+                                        const isActive = selectedModel.tags.some((t) => t.id === tag.id);
                                         return (
                                             <button
                                                 key={tag.id}
                                                 onClick={() => handleToggleTag(tag.id)}
                                                 className={`tag ${isActive ? 'active' : ''}`}
-                                                style={{
-                                                    backgroundColor: tag.color,
-                                                    color: '#000',
-                                                    opacity: isActive ? 1 : 0.5,
-                                                }}
+                                                style={{ backgroundColor: tag.color, color: '#000', opacity: isActive ? 1 : 0.5 }}
                                             >
                                                 {tag.name}
                                             </button>
                                         );
                                     })}
-
-                                    {/* New Tag Button */}
                                     {!isCreatingTag ? (
                                         <button
                                             onClick={() => setIsCreatingTag(true)}
@@ -338,11 +373,12 @@ export default function ModelViewer() {
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') handleCreateTag();
                                                     if (e.key === 'Escape') {
+                                                        e.stopPropagation();
                                                         setIsCreatingTag(false);
                                                         setNewTagName('');
                                                     }
                                                 }}
-                                                placeholder="Tag name..."
+                                                placeholder="Tag name…"
                                                 className="bg-transparent text-text-primary text-xs w-20 focus:outline-none"
                                             />
                                             <input
@@ -352,64 +388,39 @@ export default function ModelViewer() {
                                                 className="w-4 h-4 rounded cursor-pointer border-none p-0 bg-transparent"
                                                 title="Choose color"
                                             />
-                                            <button
-                                                onClick={handleCreateTag}
-                                                className="text-accent-blue hover:text-text-primary transition-colors"
-                                            >
+                                            <button onClick={handleCreateTag} className="text-accent-blue hover:text-text-primary transition-colors">
                                                 <Plus size={12} />
                                             </button>
                                         </div>
                                     )}
                                 </div>
-                            </div>
+                            </section>
                         </div>
 
-                        {/* Actions - Fixed at bottom */}
+                        {/* Actions */}
                         <div className="p-4 border-t border-accent-gray space-y-2 flex-shrink-0 bg-primary-card">
                             <button
-                                onClick={async () => {
-                                    if (!selectedModel) return;
-                                    try {
-                                        // TODO: Add slicer selection if multiple slicers found
-                                        // For now, let's try to get slicers and use the first one, or handle generic open
-                                        const slicers = await window.electronAPI.getSlicers();
-                                        if (slicers && slicers.length > 0) {
-                                            await window.electronAPI.openInSlicer(selectedModel.filepath, slicers[0].id);
-                                        } else {
-                                            console.warn('No slicers configured or found');
-                                            // Fallback to opening folder? or show alert?
-                                            // alert('No slicers found. Please configure a slicer in settings.');
-
-                                            // Fallback: Open with default system app
-                                            await window.electronAPI.openInSlicer(selectedModel.filepath, 'default');
-                                        }
-                                    } catch (err) {
-                                        console.error('Failed to open in slicer:', err);
-                                    }
-                                }}
-                                className="btn btn-primary w-full"
+                                onClick={() => window.electronAPI.openInSlicer(selectedModel.filepath, 'default').catch((err) => console.error(err))}
+                                className="btn btn-primary w-full disabled:opacity-50"
+                                disabled={missing}
                             >
-                                <ExternalLink size={16} />
-                                Open in Slicer
+                                <ExternalLink size={16} /> Open in Slicer
                             </button>
                             <button
-                                onClick={async () => {
-                                    if (!selectedModel) return;
-                                    try {
-                                        await window.electronAPI.openFolder(selectedModel.filepath);
-                                    } catch (err) {
-                                        console.error('Failed to open folder:', err);
-                                    }
-                                }}
-                                className="btn btn-secondary w-full"
+                                onClick={() => window.electronAPI.openFolder(selectedModel.filepath).catch((err) => console.error(err))}
+                                className="btn btn-secondary w-full disabled:opacity-50"
+                                disabled={missing}
                             >
-                                <Folder size={16} />
-                                Show in Folder
+                                <Folder size={16} /> Show in Folder
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {isEditingMetadata && (
+                <MetadataEditor modelId={selectedModel.id} currentMetadata={meta} onClose={() => setIsEditingMetadata(false)} />
+            )}
         </div>
     );
 }

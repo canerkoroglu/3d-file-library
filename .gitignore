@@ -38,3 +38,5 @@ Thumbs.db
 
 # Custom
 build_*.txt
+# electron-builder output
+release/

@@ -1,167 +1,107 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { STLLoader } from 'three-stdlib';
-import { ThreeMFLoader } from 'three-stdlib';
-import { OBJLoader } from 'three-stdlib';
+import { useEffect, useState } from 'react';
+import { OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
 import * as THREE from 'three';
+import type { FileType } from '../types';
 
 interface GenericModelProps {
     filepath: string;
-    fileType: string;
+    fileType: FileType;
+    onError?: (message: string) => void;
 }
 
-export default function GenericModel({ filepath, fileType }: GenericModelProps) {
-    const meshRef = useRef<THREE.Group>(null);
-    const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
-    const [object, setObject] = useState<THREE.Object3D | null>(null);
-    const [error, setError] = useState<string | null>(null);
+const TARGET_SIZE = 5;
+const MODEL_COLOR = '#3b82f6';
 
-    // Load file via IPC and parse manually
+function disposeObject(object: THREE.Object3D): void {
+    object.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+            child.geometry.dispose();
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((m) => m.dispose());
+        }
+    });
+}
+
+async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THREE.Object3D> {
+    if (fileType === 'stl') {
+        const geometry = new STLLoader().parse(buffer);
+        geometry.computeVertexNormals();
+        return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: MODEL_COLOR, roughness: 0.5, metalness: 0.05 }));
+    }
+    if (fileType === 'obj') {
+        const object = new OBJLoader().parse(new TextDecoder().decode(buffer));
+        object.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+                child.material = new THREE.MeshStandardMaterial({ color: MODEL_COLOR, roughness: 0.5, metalness: 0.05 });
+            }
+        });
+        return object;
+    }
+    const blob = new Blob([buffer], { type: 'model/3mf' });
+    const url = URL.createObjectURL(blob);
+    try {
+        return await new ThreeMFLoader().loadAsync(url);
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+}
+
+/**
+ * Wraps a loaded object so that the print bed's Z axis points up, the model sits on
+ * the grid, and it is scaled to a consistent on-screen size.
+ */
+function prepare(object: THREE.Object3D): THREE.Group {
+    const oriented = new THREE.Group();
+    oriented.rotation.x = -Math.PI / 2;
+    oriented.add(object);
+
+    const holder = new THREE.Group();
+    holder.add(oriented);
+    holder.updateMatrixWorld(true);
+
+    const box = new THREE.Box3().setFromObject(holder);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const scale = TARGET_SIZE / maxDim;
+
+    holder.scale.setScalar(scale);
+    holder.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+    return holder;
+}
+
+export default function GenericModel({ filepath, fileType, onError }: GenericModelProps) {
+    const [object, setObject] = useState<THREE.Group | null>(null);
+
     useEffect(() => {
         let cancelled = false;
+        let loaded: THREE.Group | null = null;
 
-        const loadFile = async () => {
+        const load = async () => {
             try {
-                // console.log('Loading file via IPC:', filepath);
-
-                // Check if electronAPI is available
-                if (!window.electronAPI || !window.electronAPI.readFileAsBuffer) {
-                    console.error('electronAPI.readFileAsBuffer not available');
-                    setError('File loading API not available');
+                const buffer = await window.electronAPI.readFileAsBuffer(filepath);
+                if (cancelled) return;
+                const raw = await loadObject(buffer, fileType);
+                if (cancelled) {
+                    disposeObject(raw);
                     return;
                 }
-
-                const arrayBuffer = await window.electronAPI.readFileAsBuffer(filepath);
-
-                if (cancelled) return;
-
-                // Parse the file data based on type
-                if (fileType === 'stl') {
-                    const loader = new STLLoader();
-                    const geom = loader.parse(arrayBuffer);
-                    if (!cancelled) {
-                        setGeometry(geom);
-                        setObject(null);
-                    }
-                } else if (fileType === '3mf') {
-                    const loader = new ThreeMFLoader();
-                    // ThreeMFLoader expects a string path, not ArrayBuffer
-                    // We need to create a blob URL for this
-                    const blob = new Blob([arrayBuffer], { type: 'model/3mf' });
-                    const blobUrl = URL.createObjectURL(blob);
-                    const obj = await loader.loadAsync(blobUrl);
-                    URL.revokeObjectURL(blobUrl);
-                    if (!cancelled) {
-                        setObject(obj);
-                        setGeometry(null);
-                    }
-                } else if (fileType === 'obj') {
-                    const loader = new OBJLoader();
-                    const text = new TextDecoder().decode(arrayBuffer);
-                    const obj = loader.parse(text);
-                    if (!cancelled) {
-                        setObject(obj);
-                        setGeometry(null);
-                    }
-                }
-
-                // console.log('Successfully loaded model:', filepath);
+                loaded = prepare(raw);
+                setObject(loaded);
             } catch (error) {
-                if (!cancelled) {
-                    console.error('Failed to load file:', filepath, error);
-                    setError('Failed to load model');
-                }
+                console.error('Failed to load model:', filepath, error);
+                if (!cancelled) onError?.(error instanceof Error ? error.message : 'Failed to load model');
             }
         };
-
-        loadFile();
+        void load();
 
         return () => {
             cancelled = true;
+            if (loaded) disposeObject(loaded);
+            setObject(null);
         };
-    }, [filepath, fileType]);
+    }, [filepath, fileType, onError]);
 
-    // Center and scale logic
-    useEffect(() => {
-        if (!meshRef.current) return;
-
-        if (geometry) {
-            geometry.computeBoundingBox();
-            geometry.center();
-            geometry.computeBoundingBox(); // Recompute after centering
-
-            // Move to floor (y=0)
-            if (geometry.boundingBox) {
-                geometry.translate(0, -geometry.boundingBox.min.y, 0);
-            }
-
-            // Auto-scale
-            if (geometry.boundingBox) {
-                const size = new THREE.Vector3();
-                geometry.boundingBox.getSize(size);
-                const maxDim = Math.max(size.x, size.y, size.z);
-
-                if (maxDim > 20 || maxDim < 0.1) {
-                    const scale = 5 / maxDim;
-                    meshRef.current.scale.set(scale, scale, scale);
-                }
-            }
-        } else if (object) {
-            const box = new THREE.Box3().setFromObject(object);
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            const center = new THREE.Vector3();
-            box.getCenter(center);
-
-            // Center X and Z, but align bottom to Y=0
-            object.position.x += (object.position.x - center.x);
-            object.position.y += (object.position.y - box.min.y);
-            object.position.z += (object.position.z - center.z);
-
-            // Auto-scale
-            const maxDim = Math.max(size.x, size.y, size.z);
-            if (maxDim > 20 || maxDim < 0.1) {
-                const scale = 5 / maxDim;
-                object.scale.set(scale, scale, scale);
-            }
-        }
-    }, [geometry, object]);
-
-    // Clean up resources on unmount
-    useEffect(() => {
-        return () => {
-            if (geometry) {
-                geometry.dispose();
-            }
-            if (object) {
-                object.traverse((child) => {
-                    if (child instanceof THREE.Mesh) {
-                        child.geometry.dispose();
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(m => m.dispose());
-                        } else {
-                            child.material.dispose();
-                        }
-                    }
-                });
-            }
-        };
-    }, [geometry, object]);
-
-    if (error) {
-        return null;
-    }
-
-    if (fileType === 'stl' && geometry) {
-        return (
-            <mesh ref={meshRef as unknown as React.RefObject<THREE.Mesh>} geometry={geometry}>
-                <meshStandardMaterial color="#3b82f6" />
-            </mesh>
-        );
-    }
-
-    if (object) {
-        return <primitive object={object} ref={meshRef} />;
-    }
-
-    return null;
+    if (!object) return null;
+    return <primitive object={object} />;
 }

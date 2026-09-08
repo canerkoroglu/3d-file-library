@@ -1,5 +1,40 @@
 import { create } from 'zustand';
-import type { ModelWithTags, Tag, Collection, FilterOptions, DuplicateGroup } from '../types';
+import type {
+    Collection,
+    DuplicateGroup,
+    FilterOptions,
+    IndexProgress,
+    LibraryStats,
+    ModelWithTags,
+    SortBy,
+    SortOrder,
+    Tag,
+} from '../types';
+
+type Theme = 'dark' | 'light' | 'system';
+
+const SEARCH_DEBOUNCE_MS = 200;
+
+function applyThemeToDom(theme: Theme): void {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    if (theme === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.classList.add(prefersDark ? 'dark' : 'light');
+    } else {
+        root.classList.add(theme);
+    }
+}
+
+function readStoredTheme(): Theme {
+    try {
+        const stored = localStorage.getItem('theme');
+        if (stored === 'dark' || stored === 'light' || stored === 'system') return stored;
+    } catch {
+        // storage unavailable
+    }
+    return 'system';
+}
 
 interface AppState {
     // Data
@@ -7,60 +42,52 @@ interface AppState {
     tags: Tag[];
     collections: Collection[];
 
-    // UI State
+    // Filters
     selectedCollection: number | null;
     selectedTags: number[];
     searchQuery: string;
+    sortBy: SortBy;
+    sortOrder: SortOrder;
+
+    // UI state
     viewMode: 'grid' | 'list';
     selectedModel: ModelWithTags | null;
     isViewerOpen: boolean;
     isSettingsOpen: boolean;
     isDuplicatesModalOpen: boolean;
     duplicateGroups: DuplicateGroup[];
-    wastedSpace: { totalWasted: number; groupCount: number } | null;
-
-    // Bulk operations
+    wastedSpace: { totalWasted: number; groupCount: number; unhashedCount: number } | null;
     selectedModels: Set<number>;
-
-    // Sorting
-    sortBy: 'name' | 'created' | 'modified' | 'size';
-    sortOrder: 'asc' | 'desc';
-
-    // Theme
-    theme: 'dark' | 'light' | 'system';
-    setTheme: (theme: 'dark' | 'light' | 'system') => void;
-
-    // Loading states
     isLoading: boolean;
+    indexProgress: IndexProgress | null;
+    libraryStats: LibraryStats | null;
+    theme: Theme;
 
     // Actions
-    setModels: (models: ModelWithTags[]) => void;
-    setTags: (tags: Tag[]) => void;
+    setTheme: (theme: Theme) => void;
     setCollections: (collections: Collection[]) => void;
     setSelectedCollection: (id: number | null) => void;
     toggleTag: (tagId: number) => void;
     setSearchQuery: (query: string) => void;
+    setSortBy: (sortBy: SortBy) => void;
+    setSortOrder: (order: SortOrder) => void;
     setViewMode: (mode: 'grid' | 'list') => void;
     openViewer: (model: ModelWithTags) => void;
     closeViewer: () => void;
     openSettings: () => void;
     closeSettings: () => void;
-    setLoading: (loading: boolean) => void;
     openDuplicatesModal: () => void;
     closeDuplicatesModal: () => void;
+    setIndexProgress: (progress: IndexProgress | null) => void;
 
-    // Bulk operations
+    // Selection
     toggleModelSelection: (id: number) => void;
     selectAllModels: () => void;
     clearSelection: () => void;
     bulkDelete: () => Promise<void>;
     bulkAddTag: (tagId: number) => Promise<void>;
 
-    // Sorting
-    setSortBy: (sortBy: 'name' | 'created' | 'modified' | 'size') => void;
-    setSortOrder: (order: 'asc' | 'desc') => void;
-
-    // Async actions
+    // Async
     loadModels: () => Promise<void>;
     loadTags: () => Promise<void>;
     loadCollections: () => Promise<void>;
@@ -72,14 +99,20 @@ interface AppState {
     deleteDuplicate: (modelId: number) => Promise<void>;
 }
 
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let loadSequence = 0;
+
 export const useStore = create<AppState>((set, get) => ({
-    // Initial state
     models: [],
     tags: [],
     collections: [],
+
     selectedCollection: null,
     selectedTags: [],
     searchQuery: '',
+    sortBy: 'created',
+    sortOrder: 'desc',
+
     viewMode: 'grid',
     selectedModel: null,
     isViewerOpen: false,
@@ -87,57 +120,62 @@ export const useStore = create<AppState>((set, get) => ({
     isDuplicatesModalOpen: false,
     duplicateGroups: [],
     wastedSpace: null,
-    isLoading: false,
-
-    // Bulk operations state
     selectedModels: new Set<number>(),
+    isLoading: false,
+    indexProgress: null,
+    libraryStats: null,
+    theme: readStoredTheme(),
 
-    // Sorting state
-    sortBy: 'created',
-    sortOrder: 'desc',
-
-    // Theme state
-    theme: (localStorage.getItem('theme') as 'dark' | 'light' | 'system') || 'system',
     setTheme: (theme) => {
         set({ theme });
-        localStorage.setItem('theme', theme);
-
-        // Apply theme immediately
-        const root = window.document.documentElement;
-        root.classList.remove('light', 'dark');
-
-        if (theme === 'system') {
-            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            root.classList.add(systemTheme);
-        } else {
-            root.classList.add(theme);
+        try {
+            localStorage.setItem('theme', theme);
+        } catch {
+            // storage unavailable
         }
+        applyThemeToDom(theme);
     },
 
-    // Sync actions
-    // Sync actions
-    setModels: (models) => set({ models }),
-    setTags: (tags) => set({ tags }),
     setCollections: (collections) => set({ collections }),
 
     setSelectedCollection: (id) => {
         set({ selectedCollection: id });
-        get().loadModels();
+        void get().loadModels();
     },
 
     toggleTag: (tagId) => {
         set((state) => ({
             selectedTags: state.selectedTags.includes(tagId)
-                ? state.selectedTags.filter(id => id !== tagId)
-                : [...state.selectedTags, tagId]
+                ? state.selectedTags.filter((id) => id !== tagId)
+                : [...state.selectedTags, tagId],
         }));
-        get().loadModels();
+        void get().loadModels();
     },
 
     setSearchQuery: (query) => {
-        set({ searchQuery: query });
-        // Debounce could be added here, but for now triggering loadModels
-        get().loadModels();
+        const { searchQuery: previous, sortBy } = get();
+        const hadText = previous.trim() !== '';
+        const hasText = query.trim() !== '';
+        // Free text ranks by relevance unless the user picked another order; clearing it restores the default.
+        const nextSort = !hadText && hasText && sortBy === 'created' ? 'relevance'
+            : hadText && !hasText && sortBy === 'relevance' ? 'created'
+            : sortBy;
+        set({ searchQuery: query, sortBy: nextSort });
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            searchTimer = null;
+            void get().loadModels();
+        }, SEARCH_DEBOUNCE_MS);
+    },
+
+    setSortBy: (sortBy) => {
+        set({ sortBy });
+        void get().loadModels();
+    },
+
+    setSortOrder: (sortOrder) => {
+        set({ sortOrder });
+        void get().loadModels();
     },
 
     setViewMode: (mode) => set({ viewMode: mode }),
@@ -145,90 +183,58 @@ export const useStore = create<AppState>((set, get) => ({
     closeViewer: () => set({ isViewerOpen: false, selectedModel: null }),
     openSettings: () => set({ isSettingsOpen: true }),
     closeSettings: () => set({ isSettingsOpen: false }),
-    setLoading: (loading) => set({ isLoading: loading }),
     openDuplicatesModal: () => set({ isDuplicatesModalOpen: true }),
     closeDuplicatesModal: () => set({ isDuplicatesModalOpen: false, duplicateGroups: [], wastedSpace: null }),
+    setIndexProgress: (progress) => set({ indexProgress: progress }),
 
-    // Bulk operations
-    toggleModelSelection: (id) => set((state) => {
-        const newSelection = new Set(state.selectedModels);
-        if (newSelection.has(id)) {
-            newSelection.delete(id);
-        } else {
-            newSelection.add(id);
-        }
-        return { selectedModels: newSelection };
-    }),
-    selectAllModels: () => set((state) => ({
-        selectedModels: new Set(state.models.map(m => m.id))
-    })),
+    toggleModelSelection: (id) =>
+        set((state) => {
+            const next = new Set(state.selectedModels);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return { selectedModels: next };
+        }),
+    selectAllModels: () => set((state) => ({ selectedModels: new Set(state.models.map((m) => m.id)) })),
     clearSelection: () => set({ selectedModels: new Set<number>() }),
 
-    // Sorting
-    setSortBy: (sortBy) => {
-        set({ sortBy });
-        get().loadModels();
-    },
-    setSortOrder: (sortOrder) => {
-        set({ sortOrder });
-        get().loadModels();
-    },
-
-    // Async actions
     loadModels: async () => {
-        set({ isLoading: true });
+        const sequence = ++loadSequence;
+        const { models: current } = get();
+        // Only show the spinner on first load; later refreshes swap data in place.
+        if (current.length === 0) set({ isLoading: true });
+
         try {
-            const { searchQuery, selectedCollection, selectedTags } = get();
-            let models: ModelWithTags[];
+            const { searchQuery, selectedCollection, selectedTags, sortBy, sortOrder } = get();
+            const filters: FilterOptions = {
+                collectionId: selectedCollection ?? undefined,
+                tagIds: selectedTags.length > 0 ? selectedTags : undefined,
+                searchQuery: searchQuery.trim() || undefined,
+                sortBy,
+                sortOrder,
+            };
+            const [models, libraryStats] = await Promise.all([
+                window.electronAPI.getModels(filters),
+                window.electronAPI.getLibraryStats(),
+            ]);
+            if (sequence !== loadSequence) return; // a newer request finished first
 
-            // Use fuzzy search if there's a search query
-            if (searchQuery && searchQuery.trim() !== '') {
-                models = await window.electronAPI.searchModels(searchQuery);
-
-                // Filter by collection if one is selected
-                if (selectedCollection !== null) {
-                    models = models.filter(m => m.collectionId === selectedCollection);
-                }
-
-                // Filter by tags locally for search results
-                if (selectedTags.length > 0) {
-                    models = models.filter(m =>
-                        selectedTags.every(tagId => m.tags?.some(t => t.id === tagId))
-                    );
-                }
-            } else {
-                // Use regular getModels with filters
-                const filters: FilterOptions = {
-                    collectionId: selectedCollection ?? undefined,
-                    tagIds: selectedTags.length > 0 ? selectedTags : undefined,
-                    sortBy: get().sortBy,
-                    sortOrder: get().sortOrder
-                };
-                models = await window.electronAPI.getModels(filters);
-            }
-
-            set({ models });
-
-            // Also update selectedModel if it exists in the new list to keep it fresh
-            const selectedModelId = get().selectedModel?.id;
-            if (selectedModelId) {
-                const updatedSelectedModel = models.find(m => m.id === selectedModelId);
-                if (updatedSelectedModel) {
-                    set({ selectedModel: updatedSelectedModel });
-                }
-            }
-
+            const selectedId = get().selectedModel?.id;
+            const refreshedSelection = selectedId ? models.find((m) => m.id === selectedId) : undefined;
+            set({
+                models,
+                libraryStats,
+                ...(refreshedSelection ? { selectedModel: refreshedSelection } : {}),
+            });
         } catch (error) {
             console.error('Failed to load models:', error);
         } finally {
-            set({ isLoading: false });
+            if (sequence === loadSequence) set({ isLoading: false });
         }
     },
 
     loadTags: async () => {
         try {
-            const tags = await window.electronAPI.getTags();
-            set({ tags });
+            set({ tags: await window.electronAPI.getTags() });
         } catch (error) {
             console.error('Failed to load tags:', error);
         }
@@ -236,8 +242,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     loadCollections: async () => {
         try {
-            const collections = await window.electronAPI.getCollections();
-            set({ collections });
+            set({ collections: await window.electronAPI.getCollections() });
         } catch (error) {
             console.error('Failed to load collections:', error);
         }
@@ -262,68 +267,36 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     addTagToModel: async (modelId, tagId) => {
-        // Optimistic update
         const { models, selectedModel, tags } = get();
-        const tagToAdd = tags.find(t => t.id === tagId);
-
-        if (tagToAdd) {
-            // Update selectedModel immediately
-            if (selectedModel && selectedModel.id === modelId) {
-                const currentTags = selectedModel.tags || [];
-                if (!currentTags.some(t => t.id === tagId)) {
-                    set({ selectedModel: { ...selectedModel, tags: [...currentTags, tagToAdd] } });
-                }
-            }
-
-            // Update models list immediately
-            const updatedModels = models.map(m => {
-                if (m.id === modelId) {
-                    const currentTags = m.tags || [];
-                    if (!currentTags.some(t => t.id === tagId)) {
-                        return { ...m, tags: [...currentTags, tagToAdd] };
-                    }
-                }
-                return m;
+        const tag = tags.find((t) => t.id === tagId);
+        if (tag) {
+            const withTag = (m: ModelWithTags) =>
+                m.id === modelId && !m.tags.some((t) => t.id === tagId) ? { ...m, tags: [...m.tags, tag] } : m;
+            set({
+                models: models.map(withTag),
+                selectedModel: selectedModel ? withTag(selectedModel) : null,
             });
-            set({ models: updatedModels });
         }
-
         try {
             await window.electronAPI.addTagToModel(modelId, tagId);
         } catch (error) {
-            console.error('Failed to add tag to model:', error);
+            console.error('Failed to add tag:', error);
             await get().loadModels();
         }
     },
 
     removeTagFromModel: async (modelId, tagId) => {
-        // Optimistic update
         const { models, selectedModel } = get();
-
-        // Update selectedModel immediately
-        if (selectedModel && selectedModel.id === modelId) {
-            const currentTags = selectedModel.tags || [];
-            if (currentTags.some(t => t.id === tagId)) {
-                set({ selectedModel: { ...selectedModel, tags: currentTags.filter(t => t.id !== tagId) } });
-            }
-        }
-
-        // Update models list immediately
-        const updatedModels = models.map(m => {
-            if (m.id === modelId) {
-                const currentTags = m.tags || [];
-                if (currentTags.some(t => t.id === tagId)) {
-                    return { ...m, tags: currentTags.filter(t => t.id !== tagId) };
-                }
-            }
-            return m;
+        const withoutTag = (m: ModelWithTags) =>
+            m.id === modelId ? { ...m, tags: m.tags.filter((t) => t.id !== tagId) } : m;
+        set({
+            models: models.map(withoutTag),
+            selectedModel: selectedModel ? withoutTag(selectedModel) : null,
         });
-        set({ models: updatedModels });
-
         try {
             await window.electronAPI.removeTagFromModel(modelId, tagId);
         } catch (error) {
-            console.error('Failed to remove tag from model:', error);
+            console.error('Failed to remove tag:', error);
             await get().loadModels();
         }
     },
@@ -331,9 +304,11 @@ export const useStore = create<AppState>((set, get) => ({
     checkForDuplicates: async () => {
         set({ isLoading: true });
         try {
-            const duplicateGroups = await window.electronAPI.findDuplicates();
-            const wastedSpace = await window.electronAPI.calculateWastedSpace();
-            set({ duplicateGroups, wastedSpace });
+            const report = await window.electronAPI.findDuplicates();
+            set({
+                duplicateGroups: report.groups,
+                wastedSpace: { totalWasted: report.totalWasted, groupCount: report.groupCount, unhashedCount: report.unhashedCount },
+            });
         } catch (error) {
             console.error('Failed to check for duplicates:', error);
         } finally {
@@ -352,11 +327,10 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     bulkDelete: async () => {
-        const selectedIds = Array.from(get().selectedModels);
-        if (selectedIds.length === 0) return;
-
+        const ids = Array.from(get().selectedModels);
+        if (ids.length === 0) return;
         try {
-            await Promise.all(selectedIds.map(id => window.electronAPI.deleteFile(id)));
+            await Promise.all(ids.map((id) => window.electronAPI.deleteFile(id)));
             set({ selectedModels: new Set<number>() });
             await get().loadModels();
         } catch (error) {
@@ -365,14 +339,15 @@ export const useStore = create<AppState>((set, get) => ({
     },
 
     bulkAddTag: async (tagId) => {
-        const selectedIds = Array.from(get().selectedModels);
-        if (selectedIds.length === 0) return;
-
+        const ids = Array.from(get().selectedModels);
+        if (ids.length === 0) return;
         try {
-            await Promise.all(selectedIds.map(id => window.electronAPI.addTagToModel(id, tagId)));
+            await Promise.all(ids.map((id) => window.electronAPI.addTagToModel(id, tagId)));
             await get().loadModels();
         } catch (error) {
             console.error('Failed to bulk add tag:', error);
         }
     },
 }));
+
+applyThemeToDom(useStore.getState().theme);

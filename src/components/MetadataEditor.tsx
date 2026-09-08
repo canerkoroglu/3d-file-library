@@ -1,19 +1,12 @@
 import { X, Globe, User, FileText, Link as LinkIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useStore } from '../store/store';
+import type { SourceMetadata } from '../types';
 
 interface MetadataEditorProps {
     modelId: number;
     currentMetadata?: SourceMetadata | null;
     onClose: () => void;
-}
-
-export interface SourceMetadata {
-    source?: string;
-    url?: string;
-    author?: string;
-    license?: string;
-    notes?: string;
 }
 
 const SOURCE_OPTIONS = [
@@ -47,12 +40,12 @@ export default function MetadataEditor({ modelId, currentMetadata, onClose }: Me
             onClose();
         } catch (error) {
             console.error('Failed to update metadata:', error);
-            alert('Failed to save metadata');
+            window.alert('Failed to save metadata');
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={(e) => e.stopPropagation()}>
             <div className="bg-[#2d2d2d] rounded-xl border border-[#404040] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-[#404040] flex items-center justify-between">
