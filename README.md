@@ -49,9 +49,12 @@ npm run dev      # Vite + Electron with hot reload
 npm run typecheck
 npm run lint
 npm test         # vitest unit tests (analyzers, query parser, SQL builder)
+npm run e2e      # builds, then drives the real window through the scenarios in scripts/e2e
 ```
 
-To run against a separate library profile (for example while testing), set `MODELIST_USER_DATA=/path/to/profile`.
+The end-to-end suite generates a throwaway library (STL, OBJ, 3MF, a Thingiverse-style folder, a zip and enough files to page), starts the app with a temporary profile and controls it over the Chrome DevTools Protocol; no extra dependencies. `--no-build` reuses the last build, `--filter <text>` runs matching scenarios, `--keep` leaves the fixtures behind, and `MODELIST_APP=<executable>` points it at a packaged build. CI runs it on macOS.
+
+Two environment variables help scripted setups: `MODELIST_USER_DATA=/path/to/profile` keeps a separate library, and `MODELIST_WATCH_FOLDERS=/a:/b` registers watched folders at startup.
 
 ### Building
 
@@ -98,6 +101,7 @@ src/
   lib/searchQuery.ts   query language parser (shared with the main process)
   thumbnails/          off-screen Three.js thumbnail renderer
 tests/                 vitest unit tests
+scripts/e2e/           end-to-end runner, fixtures and scenarios
 ```
 
 ## How data flows

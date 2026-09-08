@@ -46,15 +46,22 @@ let lastProgressAt = 0;
 
 export function getProgress(): IndexProgress {
     const pending = queue.length + inflight.size;
+    const thumbnailsQueued = callbacks?.getThumbnailQueueSize() ?? 0;
     return {
         queued: queue.length,
         active: inflight.size,
         completed,
         failed,
         total: completed + failed + pending,
-        thumbnailsQueued: callbacks?.getThumbnailQueueSize() ?? 0,
-        isRunning: pending > 0,
+        thumbnailsQueued,
+        // Rendering previews is part of getting the library ready, so keep the indicator up until it is done.
+        isRunning: pending > 0 || thumbnailsQueued > 0,
     };
+}
+
+/** Lets other queues (thumbnail rendering) refresh the progress shown to the user. */
+export function reportProgress(): void {
+    emitProgress();
 }
 
 function emitProgress(force = false): void {

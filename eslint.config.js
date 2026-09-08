@@ -8,6 +8,13 @@ export default tseslint.config(
     js.configs.recommended,
     ...tseslint.configs.recommended,
     {
+        // Plain Node scripts (end-to-end runner). fetch and WebSocket are Node 22 globals.
+        files: ['scripts/**/*.mjs'],
+        languageOptions: {
+            globals: { ...globals.node, fetch: 'readonly', WebSocket: 'readonly' },
+        },
+    },
+    {
         files: ['**/*.{ts,tsx}'],
         plugins: { 'react-hooks': reactHooks },
         languageOptions: {

@@ -15,7 +15,8 @@
     "build:win": "npm run build -- --win",
     "build:linux": "npm run build -- --linux",
     "preview": "vite preview",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "e2e": "node scripts/e2e/run.mjs"
   },
   "keywords": [
     "electron",

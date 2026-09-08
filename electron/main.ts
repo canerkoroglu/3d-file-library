@@ -6,8 +6,8 @@ import { getDatabasePath, getThumbnailDir, isInsideDir, setUserDataDir } from '.
 import { libraryEvents, notifyModelsUpdated } from './library';
 import { setupIpcHandlers } from './ipcHandlers';
 import { initializeWatchers, stopAllWatchers } from './fileWatcher';
-import { enqueueAll, startIndexer, stopIndexer } from './indexer';
-import { getThumbnailQueueSize, registerThumbnailIpc, requestThumbnailRender, setThumbnailWindow, stopThumbnailQueue } from './thumbnails';
+import { enqueueAll, reportProgress, startIndexer, stopIndexer } from './indexer';
+import { getThumbnailQueueSize, registerThumbnailIpc, requestThumbnailRender, setThumbnailQueueListener, setThumbnailWindow, stopThumbnailQueue } from './thumbnails';
 import { initUpdater } from './updater';
 import type { FileType, IndexProgress } from '../src/types';
 
@@ -103,9 +103,28 @@ protocol.registerSchemesAsPrivileged([
     { scheme: 'media', privileges: { secure: true, standard: true, supportFetchAPI: true, bypassCSP: true } },
 ]);
 
+/** MODELIST_WATCH_FOLDERS=<path>[:<path>...] registers watched folders at startup (scripted setups, end-to-end tests). */
+function registerWatchFoldersFromEnv(): void {
+    const raw = process.env.MODELIST_WATCH_FOLDERS;
+    if (!raw) return;
+    const db = getDatabase();
+    for (const folder of raw.split(path.delimiter).map((p) => p.trim()).filter(Boolean)) {
+        const resolved = path.resolve(folder);
+        const existing = db.prepare("SELECT id, is_active FROM collections WHERE type = 'watched' AND folder_path = ?").get(resolved) as
+            | { id: number; is_active: number }
+            | undefined;
+        if (existing) {
+            if (existing.is_active !== 1) db.prepare('UPDATE collections SET is_active = 1 WHERE id = ?').run(existing.id);
+        } else {
+            db.prepare("INSERT INTO collections (name, type, folder_path) VALUES (?, 'watched', ?)").run(path.basename(resolved), resolved);
+        }
+    }
+}
+
 app.whenReady().then(async () => {
     setUserDataDir(app.getPath('userData'));
     initDatabase(getDatabasePath());
+    registerWatchFoldersFromEnv();
     registerMediaProtocol();
     registerThumbnailIpc();
     setupIpcHandlers();
@@ -122,6 +141,7 @@ app.whenReady().then(async () => {
         },
         getThumbnailQueueSize,
     });
+    setThumbnailQueueListener(reportProgress);
 
     initUpdater((status) => sendToRenderer('updates:status', status));
 

@@ -343,20 +343,24 @@ export default function Sidebar() {
                 <div className="px-4 py-2 border-t border-accent-gray flex-shrink-0">
                     <div className="flex items-center justify-between text-[11px] text-text-secondary mb-1">
                         <span className="flex items-center gap-1.5">
-                            <Loader2 size={11} className="animate-spin" /> Indexing
+                            <Loader2 size={11} className="animate-spin" /> {indexProgress.total > 0 ? 'Indexing' : 'Rendering previews'}
                         </span>
                         <span className="tabular-nums">
-                            {indexProgress.completed + indexProgress.failed} / {indexProgress.total}
+                            {indexProgress.total > 0
+                                ? `${indexProgress.completed + indexProgress.failed} / ${indexProgress.total}`
+                                : `${indexProgress.thumbnailsQueued} left`}
                         </span>
                     </div>
-                    <div className="h-1 bg-primary-bg rounded overflow-hidden">
-                        <div
-                            className="h-full bg-accent-blue transition-all duration-300"
-                            style={{ width: `${indexProgress.total ? ((indexProgress.completed + indexProgress.failed) / indexProgress.total) * 100 : 0}%` }}
-                        />
-                    </div>
-                    {indexProgress.thumbnailsQueued > 0 && (
-                        <div className="text-[10px] text-text-secondary mt-1">{indexProgress.thumbnailsQueued} thumbnails to render</div>
+                    {indexProgress.total > 0 && (
+                        <div className="h-1 bg-primary-bg rounded overflow-hidden">
+                            <div
+                                className="h-full bg-accent-blue transition-all duration-300"
+                                style={{ width: `${((indexProgress.completed + indexProgress.failed) / indexProgress.total) * 100}%` }}
+                            />
+                        </div>
+                    )}
+                    {indexProgress.total > 0 && indexProgress.thumbnailsQueued > 0 && (
+                        <div className="text-[10px] text-text-secondary mt-1">{indexProgress.thumbnailsQueued} previews to render</div>
                     )}
                 </div>
             )}

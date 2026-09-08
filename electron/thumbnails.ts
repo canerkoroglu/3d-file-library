@@ -25,6 +25,12 @@ let window: BrowserWindow | null = null;
 let rendererReady = false;
 let stopped = false;
 let nextJobId = 1;
+let onQueueChange: (() => void) | null = null;
+
+/** Called whenever the number of pending renders changes (used for the progress indicator). */
+export function setThumbnailQueueListener(listener: (() => void) | null): void {
+    onQueueChange = listener;
+}
 const queue: RenderJob[] = [];
 const queuedIds = new Set<number>();
 let active: { jobId: number; job: RenderJob; timer: NodeJS.Timeout } | null = null;
@@ -72,6 +78,7 @@ export function requestThumbnailRender(modelId: number, filepath: string, fileTy
 
     queue.push({ modelId, filepath, fileType, attempts: 0 });
     queuedIds.add(modelId);
+    onQueueChange?.();
     drain();
 }
 
@@ -122,6 +129,7 @@ async function finish(jobId: number, result: ThumbnailRenderResult): Promise<voi
         }
     }
 
+    onQueueChange?.();
     drain();
 }
 
