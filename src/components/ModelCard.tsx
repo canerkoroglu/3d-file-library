@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Files, FileText, FileX } from 'lucide-react';
+import { Box, Files, FileText, FileX, Check } from 'lucide-react';
 import type { ModelWithTags } from '../types';
 import { useStore } from '../store/store';
 import { formatDimensions, formatFileSize, formatTriangles, thumbnailUrl } from '../lib/format';
@@ -7,10 +7,15 @@ import { formatDimensions, formatFileSize, formatTriangles, thumbnailUrl } from 
 interface ModelCardProps {
     model: ModelWithTags;
     viewMode: 'grid' | 'list';
+    /** Position in the loaded list, used for shift-click ranges. */
+    index: number;
+    selected: boolean;
+    /** True when any selection exists or selection mode is on: clicks toggle instead of opening. */
+    selectionActive: boolean;
 }
 
-export default function ModelCard({ model, viewMode }: ModelCardProps) {
-    const { openViewer } = useStore();
+export default function ModelCard({ model, viewMode, index, selected, selectionActive }: ModelCardProps) {
+    const { openViewer, toggleModelSelection, selectRangeTo } = useStore();
     const [imgError, setImgError] = useState(false);
     const src = thumbnailUrl(model) ?? undefined;
     const showImage = Boolean(src) && !imgError;
@@ -21,13 +26,64 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
         ? <Files size={48} className="text-text-secondary" strokeWidth={1.5} />
         : <Box size={48} className="text-text-secondary" strokeWidth={1.5} />;
 
+    const handleClick = (e: React.MouseEvent) => {
+        if (e.shiftKey) {
+            e.preventDefault();
+            selectRangeTo(index);
+            return;
+        }
+        if (e.metaKey || e.ctrlKey || selectionActive) {
+            toggleModelSelection(model.id, index);
+            return;
+        }
+        openViewer(model);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (selectionActive) toggleModelSelection(model.id, index);
+            else openViewer(model);
+        }
+    };
+
+    const handleCheckbox = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (e.shiftKey) selectRangeTo(index);
+        else toggleModelSelection(model.id, index);
+    };
+
+    const checkbox = (
+        <button
+            onClick={handleCheckbox}
+            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                selected
+                    ? 'bg-accent-blue border-accent-blue text-white opacity-100'
+                    : `bg-black/40 border-white/70 text-transparent hover:border-white ${selectionActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`
+            }`}
+            title={selected ? 'Deselect' : 'Select'}
+            aria-label={selected ? 'Deselect' : 'Select'}
+            aria-pressed={selected}
+            tabIndex={-1}
+        >
+            <Check size={12} strokeWidth={3} />
+        </button>
+    );
+
+    const selectedRing = selected ? 'ring-2 ring-accent-blue border-accent-blue' : '';
+
     if (viewMode === 'list') {
         return (
-            <button
-                onClick={() => openViewer(model)}
-                className={`model-card w-full h-full p-3 flex items-center gap-4 hover:border-accent-blue ${missing ? 'opacity-60' : ''}`}
+            <div
+                role="button"
+                tabIndex={0}
+                onClick={handleClick}
+                onKeyDown={handleKeyDown}
+                aria-selected={selected}
+                className={`model-card group w-full h-full p-3 flex items-center gap-4 hover:border-accent-blue ${missing ? 'opacity-60' : ''} ${selectedRing}`}
                 title={missingTitle}
             >
+                <div className="flex-shrink-0">{checkbox}</div>
                 <div className="w-14 h-14 bg-primary-bg rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                     {showImage ? (
                         <img src={src} alt={model.filename} className="w-full h-full object-cover" onError={() => setImgError(true)} loading="lazy" />
@@ -48,18 +104,28 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
                     <span>{formatFileSize(model.fileSize)}</span>
                     <span className="uppercase font-semibold w-8">{model.fileType}</span>
                 </div>
-            </button>
+            </div>
         );
     }
 
     return (
-        <button onClick={() => openViewer(model)} className={`model-card group flex flex-col h-full ${missing ? 'opacity-60' : ''}`} title={missingTitle}>
+        <div
+            role="button"
+            tabIndex={0}
+            onClick={handleClick}
+            onKeyDown={handleKeyDown}
+            aria-selected={selected}
+            className={`model-card group flex flex-col h-full ${missing ? 'opacity-60' : ''} ${selectedRing}`}
+            title={missingTitle}
+        >
             <div className="thumbnail relative">
                 {missing && (
                     <div className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-red-500/85 backdrop-blur-sm rounded text-[10px] font-bold text-white uppercase flex items-center gap-1">
                         <FileX size={10} /> Missing
                     </div>
                 )}
+                <div className="absolute top-2 right-2 z-10">{checkbox}</div>
+
                 {showImage ? (
                     <img src={src} alt={model.filename} className="w-full h-full object-cover" onError={() => setImgError(true)} loading="lazy" />
                 ) : (
@@ -100,6 +166,6 @@ export default function ModelCard({ model, viewMode }: ModelCardProps) {
                     )}
                 </div>
             </div>
-        </button>
+        </div>
     );
 }

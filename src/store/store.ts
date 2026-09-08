@@ -64,6 +64,10 @@ interface AppState {
     duplicateGroups: DuplicateGroup[];
     wastedSpace: { totalWasted: number; groupCount: number; unhashedCount: number } | null;
     selectedModels: Set<number>;
+    /** True while the user is in selection mode (checkboxes shown, clicks toggle instead of opening). */
+    selectionMode: boolean;
+    /** Index (in `models`) of the last explicitly toggled card; shift-click ranges start here. */
+    selectionAnchor: number | null;
     isLoading: boolean;
     indexProgress: IndexProgress | null;
     libraryStats: LibraryStats | null;
@@ -91,11 +95,15 @@ interface AppState {
     closeImportZip: () => void;
 
     // Selection
-    toggleModelSelection: (id: number) => void;
+    setSelectionMode: (on: boolean) => void;
+    toggleModelSelection: (id: number, index?: number) => void;
+    selectRangeTo: (index: number) => void;
     selectAllModels: () => void;
     clearSelection: () => void;
     bulkDelete: () => Promise<void>;
     bulkAddTag: (tagId: number) => Promise<void>;
+    bulkRemoveTag: (tagId: number) => Promise<void>;
+    bulkAddToCollection: (collectionId: number) => Promise<void>;
 
     // Async
     /** Reloads the listing. `reset` starts again from the first page; otherwise the loaded window is refreshed in place. */
@@ -152,6 +160,8 @@ export const useStore = create<AppState>((set, get) => ({
     duplicateGroups: [],
     wastedSpace: null,
     selectedModels: new Set<number>(),
+    selectionMode: false,
+    selectionAnchor: null,
     isLoading: false,
     indexProgress: null,
     libraryStats: null,
@@ -228,15 +238,24 @@ export const useStore = create<AppState>((set, get) => ({
         })),
     closeImportZip: () => set({ importZipDialog: { open: false, zipPaths: [] } }),
 
-    toggleModelSelection: (id) =>
+    setSelectionMode: (on) => set(on ? { selectionMode: true } : { selectionMode: false, selectedModels: new Set<number>(), selectionAnchor: null }),
+    toggleModelSelection: (id, index) =>
         set((state) => {
             const next = new Set(state.selectedModels);
             if (next.has(id)) next.delete(id);
             else next.add(id);
+            return { selectedModels: next, selectionAnchor: index ?? state.selectionAnchor };
+        }),
+    selectRangeTo: (index) =>
+        set((state) => {
+            const anchor = state.selectionAnchor ?? index;
+            const [from, to] = anchor <= index ? [anchor, index] : [index, anchor];
+            const next = new Set(state.selectedModels);
+            for (const model of state.models.slice(from, to + 1)) next.add(model.id);
             return { selectedModels: next };
         }),
     selectAllModels: () => set((state) => ({ selectedModels: new Set(state.models.map((m) => m.id)) })),
-    clearSelection: () => set({ selectedModels: new Set<number>() }),
+    clearSelection: () => set({ selectedModels: new Set<number>(), selectionMode: false, selectionAnchor: null }),
 
     loadModels: async (options) => {
         const sequence = ++loadSequence;
@@ -389,7 +408,7 @@ export const useStore = create<AppState>((set, get) => ({
         if (ids.length === 0) return;
         try {
             await Promise.all(ids.map((id) => window.electronAPI.deleteFile(id)));
-            set({ selectedModels: new Set<number>() });
+            set({ selectedModels: new Set<number>(), selectionMode: false, selectionAnchor: null });
             await get().loadModels();
         } catch (error) {
             console.error('Failed to bulk delete:', error);
@@ -439,6 +458,28 @@ export const useStore = create<AppState>((set, get) => ({
             await get().loadModels();
         } catch (error) {
             console.error('Failed to bulk add tag:', error);
+        }
+    },
+
+    bulkRemoveTag: async (tagId) => {
+        const ids = Array.from(get().selectedModels);
+        if (ids.length === 0) return;
+        try {
+            await Promise.all(ids.map((id) => window.electronAPI.removeTagFromModel(id, tagId)));
+            await get().loadModels();
+        } catch (error) {
+            console.error('Failed to bulk remove tag:', error);
+        }
+    },
+
+    bulkAddToCollection: async (collectionId) => {
+        const ids = Array.from(get().selectedModels);
+        if (ids.length === 0) return;
+        try {
+            await Promise.all(ids.map((id) => window.electronAPI.addModelToCollection(id, collectionId)));
+            await get().loadModels();
+        } catch (error) {
+            console.error('Failed to bulk add to collection:', error);
         }
     },
 }));

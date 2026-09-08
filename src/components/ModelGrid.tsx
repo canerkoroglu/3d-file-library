@@ -11,7 +11,8 @@ const LIST_ROW_HEIGHT = 80;
 const PADDING = 20;
 
 export default function ModelGrid() {
-    const { models, totalModels, isLoading, isLoadingMore, loadMoreModels, viewMode, searchQuery, selectedTags, selectedCollection } = useStore();
+    const { models, totalModels, isLoading, isLoadingMore, loadMoreModels, viewMode, searchQuery, selectedTags, selectedCollection, selectedModels, selectionMode } = useStore();
+    const selectionActive = selectionMode || selectedModels.size > 0;
     const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
     const [width, setWidth] = useState(0);
 
@@ -106,8 +107,15 @@ export default function ModelGrid() {
                                 paddingBottom: viewMode === 'grid' ? GRID_GAP : 8,
                             }}
                         >
-                            {items.map((model) => (
-                                <ModelCard key={model.id} model={model} viewMode={viewMode} />
+                            {items.map((model, i) => (
+                                <ModelCard
+                                    key={model.id}
+                                    model={model}
+                                    viewMode={viewMode}
+                                    index={start + i}
+                                    selected={selectedModels.has(model.id)}
+                                    selectionActive={selectionActive}
+                                />
                             ))}
                         </div>
                     );

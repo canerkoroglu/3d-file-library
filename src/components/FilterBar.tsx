@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Grid, List, HelpCircle, X } from 'lucide-react';
+import { Search, Grid, List, HelpCircle, X, CheckSquare } from 'lucide-react';
 import { useStore } from '../store/store';
 import type { SortBy, SortOrder } from '../types';
 
@@ -38,7 +38,9 @@ export default function FilterBar() {
         tags, selectedTags, toggleTag,
         sortBy, sortOrder, setSortBy, setSortOrder,
         totalModels,
+        selectionMode, selectedModels, setSelectionMode, clearSelection,
     } = useStore();
+    const selectionActive = selectionMode || selectedModels.size > 0;
     const [showHelp, setShowHelp] = useState(false);
 
     return (
@@ -106,6 +108,16 @@ export default function FilterBar() {
                         <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                 </select>
+
+                {/* Selection mode */}
+                <button
+                    onClick={() => (selectionActive ? clearSelection() : setSelectionMode(true))}
+                    className={`h-9 px-3 rounded-lg border text-sm flex items-center gap-1.5 transition-colors ${selectionActive ? 'bg-accent-blue border-accent-blue text-white' : 'bg-primary-bg border-accent-gray text-text-secondary hover:text-text-primary hover:bg-primary-hover'}`}
+                    title={selectionActive ? 'Exit selection (Esc)' : 'Select models (or ⌘/Ctrl-click cards)'}
+                >
+                    <CheckSquare size={16} />
+                    {selectionActive ? 'Done' : 'Select'}
+                </button>
 
                 {/* View mode */}
                 <div className="flex items-center bg-primary-bg rounded-lg p-1 border border-accent-gray">

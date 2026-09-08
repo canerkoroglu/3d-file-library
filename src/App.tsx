@@ -11,8 +11,25 @@ import BulkActionsBar from './components/BulkActionsBar';
 import ImportZipDialog from './components/ImportZipDialog';
 
 function App() {
-    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip } = useStore();
+    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip, selectAllModels, clearSelection } = useStore();
     const [dragDepth, setDragDepth] = useState(0);
+    const modalOpen = isViewerOpen || isDuplicatesModalOpen || isSettingsOpen || importZipDialog.open;
+
+    // Esc clears the selection; ⌘/Ctrl+A selects every loaded model (unless typing in a field or a dialog is open).
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (modalOpen) return;
+            const target = e.target as HTMLElement | null;
+            const typing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable;
+            if (e.key === 'Escape' && !typing) clearSelection();
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a' && !typing) {
+                e.preventDefault();
+                selectAllModels();
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [modalOpen, selectAllModels, clearSelection]);
 
     // Dropping ZIP archives opens the importer; dropping model files registers them in place.
     useEffect(() => {
