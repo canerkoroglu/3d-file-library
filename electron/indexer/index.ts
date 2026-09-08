@@ -30,6 +30,7 @@ interface IndexerCallbacks {
 
 let child: UtilityProcess | null = null;
 let workerReady = false;
+let stopped = false;
 let callbacks: IndexerCallbacks | null = null;
 let nextJobId = 1;
 
@@ -72,7 +73,7 @@ function emitProgress(force = false): void {
 }
 
 function spawnWorker(): void {
-    if (child) return;
+    if (child || stopped) return;
     console.log('[Indexer] Starting worker process');
     child = utilityProcess.fork(WORKER_PATH, [], { serviceName: 'modelist-indexer' });
 
@@ -160,6 +161,7 @@ function pump(): void {
 }
 
 function handleResult(message: Extract<WorkerResponse, { type: 'result' }>): void {
+    if (stopped) return;
     inflight.delete(message.id);
 
     if (message.ok) {
@@ -217,9 +219,12 @@ export function dequeueModel(modelId: number): void {
 }
 
 export function stopIndexer(): void {
+    stopped = true;
     queue.length = 0;
     queued.clear();
+    inflight.clear();
     if (child) {
+        child.removeAllListeners();
         send({ type: 'shutdown' });
         child = null;
         workerReady = false;

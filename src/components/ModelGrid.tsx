@@ -11,7 +11,7 @@ const LIST_ROW_HEIGHT = 80;
 const PADDING = 20;
 
 export default function ModelGrid() {
-    const { models, isLoading, viewMode, searchQuery, selectedTags, selectedCollection } = useStore();
+    const { models, totalModels, isLoading, isLoadingMore, loadMoreModels, viewMode, searchQuery, selectedTags, selectedCollection } = useStore();
     const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
     const [width, setWidth] = useState(0);
 
@@ -44,6 +44,13 @@ export default function ModelGrid() {
     useEffect(() => {
         virtualizer.measure();
     }, [rowHeight, columns, virtualizer]);
+
+    // Fetch the next page once the user scrolls near the last loaded row.
+    const virtualItems = virtualizer.getVirtualItems();
+    const lastVisibleRow = virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
+    useEffect(() => {
+        if (models.length < totalModels && lastVisibleRow >= rowCount - 3) void loadMoreModels();
+    }, [lastVisibleRow, rowCount, models.length, totalModels, loadMoreModels]);
 
     if (isLoading && models.length === 0) {
         return (
@@ -80,7 +87,7 @@ export default function ModelGrid() {
     return (
         <div ref={setScrollEl} className="flex-1 overflow-y-auto bg-primary-bg" style={{ padding: PADDING }}>
             <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
-                {virtualizer.getVirtualItems().map((row) => {
+                {virtualItems.map((row) => {
                     const start = row.index * columns;
                     const items = models.slice(start, start + columns);
                     return (
@@ -106,6 +113,12 @@ export default function ModelGrid() {
                     );
                 })}
             </div>
+            {(isLoadingMore || models.length < totalModels) && (
+                <div className="flex items-center justify-center gap-2 py-4 text-xs text-text-secondary">
+                    {isLoadingMore ? <Loader2 size={14} className="animate-spin" /> : null}
+                    {isLoadingMore ? 'Loading more…' : `${models.length.toLocaleString()} of ${totalModels.toLocaleString()} loaded`}
+                </div>
+            )}
         </div>
     );
 }

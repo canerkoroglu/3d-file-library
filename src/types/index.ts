@@ -91,6 +91,14 @@ export interface FilterOptions {
     sortBy?: SortBy;
     sortOrder?: SortOrder;
     limit?: number;
+    offset?: number;
+}
+
+/** One page of a listing plus the total number of matches for the same filters. */
+export interface ModelPage {
+    items: ModelWithTags[];
+    total: number;
+    offset: number;
 }
 
 export interface Slicer {
@@ -142,7 +150,7 @@ export interface ThumbnailRenderResult {
 // Electron IPC API exposed through the preload script
 export interface ElectronAPI {
     // Model operations
-    getModels: (filters?: FilterOptions) => Promise<ModelWithTags[]>;
+    getModels: (filters?: FilterOptions) => Promise<ModelPage>;
     getModelReadme: (id: number) => Promise<string | null>;
     importFiles: () => Promise<Model[]>;
     deleteFile: (id: number) => Promise<void>;

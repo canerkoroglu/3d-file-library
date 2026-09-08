@@ -9,7 +9,7 @@ import {
     getLibraryStats,
     getModel,
     getModelReadme,
-    getModels,
+    getModelsPage,
     importModel,
     notifyModelsUpdated,
     rebuildSearchIndex,
@@ -55,7 +55,7 @@ export function setupIpcHandlers(): void {
 
     // ============ Models ============
 
-    handle('get-models', (_event, filters?: FilterOptions) => getModels(filters));
+    handle('get-models', (_event, filters?: FilterOptions) => getModelsPage(filters));
 
     handle('get-model-readme', (_event, id: number) => getModelReadme(id));
 

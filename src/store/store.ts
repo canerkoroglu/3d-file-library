@@ -14,6 +14,7 @@ import type {
 type Theme = 'dark' | 'light' | 'system';
 
 const SEARCH_DEBOUNCE_MS = 200;
+const PAGE_SIZE = 200;
 
 function applyThemeToDom(theme: Theme): void {
     const root = window.document.documentElement;
@@ -38,7 +39,11 @@ function readStoredTheme(): Theme {
 
 interface AppState {
     // Data
+    /** Models loaded so far for the current filters (paged). */
     models: ModelWithTags[];
+    /** Total matches for the current filters, which may exceed models.length. */
+    totalModels: number;
+    isLoadingMore: boolean;
     tags: Tag[];
     collections: Collection[];
 
@@ -88,7 +93,9 @@ interface AppState {
     bulkAddTag: (tagId: number) => Promise<void>;
 
     // Async
-    loadModels: () => Promise<void>;
+    /** Reloads the listing. `reset` starts again from the first page; otherwise the loaded window is refreshed in place. */
+    loadModels: (options?: { reset?: boolean }) => Promise<void>;
+    loadMoreModels: () => Promise<void>;
     loadTags: () => Promise<void>;
     loadCollections: () => Promise<void>;
     importFiles: () => Promise<void>;
@@ -102,8 +109,20 @@ interface AppState {
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let loadSequence = 0;
 
+function currentFilters(state: Pick<AppState, 'searchQuery' | 'selectedCollection' | 'selectedTags' | 'sortBy' | 'sortOrder'>): FilterOptions {
+    return {
+        collectionId: state.selectedCollection ?? undefined,
+        tagIds: state.selectedTags.length > 0 ? state.selectedTags : undefined,
+        searchQuery: state.searchQuery.trim() || undefined,
+        sortBy: state.sortBy,
+        sortOrder: state.sortOrder,
+    };
+}
+
 export const useStore = create<AppState>((set, get) => ({
     models: [],
+    totalModels: 0,
+    isLoadingMore: false,
     tags: [],
     collections: [],
 
@@ -140,7 +159,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     setSelectedCollection: (id) => {
         set({ selectedCollection: id });
-        void get().loadModels();
+        void get().loadModels({ reset: true });
     },
 
     toggleTag: (tagId) => {
@@ -149,7 +168,7 @@ export const useStore = create<AppState>((set, get) => ({
                 ? state.selectedTags.filter((id) => id !== tagId)
                 : [...state.selectedTags, tagId],
         }));
-        void get().loadModels();
+        void get().loadModels({ reset: true });
     },
 
     setSearchQuery: (query) => {
@@ -164,18 +183,18 @@ export const useStore = create<AppState>((set, get) => ({
         if (searchTimer) clearTimeout(searchTimer);
         searchTimer = setTimeout(() => {
             searchTimer = null;
-            void get().loadModels();
+            void get().loadModels({ reset: true });
         }, SEARCH_DEBOUNCE_MS);
     },
 
     setSortBy: (sortBy) => {
         set({ sortBy });
-        void get().loadModels();
+        void get().loadModels({ reset: true });
     },
 
     setSortOrder: (sortOrder) => {
         set({ sortOrder });
-        void get().loadModels();
+        void get().loadModels({ reset: true });
     },
 
     setViewMode: (mode) => set({ viewMode: mode }),
@@ -197,38 +216,55 @@ export const useStore = create<AppState>((set, get) => ({
     selectAllModels: () => set((state) => ({ selectedModels: new Set(state.models.map((m) => m.id)) })),
     clearSelection: () => set({ selectedModels: new Set<number>() }),
 
-    loadModels: async () => {
+    loadModels: async (options) => {
         const sequence = ++loadSequence;
         const { models: current } = get();
+        const reset = options?.reset ?? false;
         // Only show the spinner on first load; later refreshes swap data in place.
         if (current.length === 0) set({ isLoading: true });
 
         try {
-            const { searchQuery, selectedCollection, selectedTags, sortBy, sortOrder } = get();
-            const filters: FilterOptions = {
-                collectionId: selectedCollection ?? undefined,
-                tagIds: selectedTags.length > 0 ? selectedTags : undefined,
-                searchQuery: searchQuery.trim() || undefined,
-                sortBy,
-                sortOrder,
-            };
-            const [models, libraryStats] = await Promise.all([
-                window.electronAPI.getModels(filters),
+            // A refresh keeps the window the user has already scrolled through; a filter change starts over.
+            const limit = reset ? PAGE_SIZE : Math.max(PAGE_SIZE, current.length);
+            const [page, libraryStats] = await Promise.all([
+                window.electronAPI.getModels({ ...currentFilters(get()), limit, offset: 0 }),
                 window.electronAPI.getLibraryStats(),
             ]);
             if (sequence !== loadSequence) return; // a newer request finished first
 
             const selectedId = get().selectedModel?.id;
-            const refreshedSelection = selectedId ? models.find((m) => m.id === selectedId) : undefined;
+            const refreshedSelection = selectedId ? page.items.find((m) => m.id === selectedId) : undefined;
             set({
-                models,
+                models: page.items,
+                totalModels: page.total,
                 libraryStats,
+                isLoadingMore: false,
                 ...(refreshedSelection ? { selectedModel: refreshedSelection } : {}),
             });
         } catch (error) {
             console.error('Failed to load models:', error);
         } finally {
             if (sequence === loadSequence) set({ isLoading: false });
+        }
+    },
+
+    loadMoreModels: async () => {
+        const { models, totalModels, isLoadingMore, isLoading } = get();
+        if (isLoadingMore || isLoading || models.length >= totalModels) return;
+        const sequence = loadSequence;
+        set({ isLoadingMore: true });
+        try {
+            const page = await window.electronAPI.getModels({ ...currentFilters(get()), limit: PAGE_SIZE, offset: models.length });
+            if (sequence !== loadSequence) return; // filters changed meanwhile; the refresh wins
+            const known = new Set(get().models.map((m) => m.id));
+            set({
+                models: [...get().models, ...page.items.filter((m) => !known.has(m.id))],
+                totalModels: page.total,
+            });
+        } catch (error) {
+            console.error('Failed to load more models:', error);
+        } finally {
+            if (sequence === loadSequence) set({ isLoadingMore: false });
         }
     },
 

@@ -23,6 +23,7 @@ interface RenderJob {
 
 let window: BrowserWindow | null = null;
 let rendererReady = false;
+let stopped = false;
 let nextJobId = 1;
 const queue: RenderJob[] = [];
 const queuedIds = new Set<number>();
@@ -82,7 +83,7 @@ export function cancelThumbnailRender(modelId: number): void {
 }
 
 function drain(): void {
-    if (active || !rendererReady || !window || window.isDestroyed()) return;
+    if (stopped || active || !rendererReady || !window || window.isDestroyed()) return;
     const job = queue.shift();
     if (!job) return;
     queuedIds.delete(job.modelId);
@@ -97,7 +98,7 @@ function drain(): void {
 }
 
 async function finish(jobId: number, result: ThumbnailRenderResult): Promise<void> {
-    if (!active || active.jobId !== jobId) return;
+    if (stopped || !active || active.jobId !== jobId) return;
     clearTimeout(active.timer);
     const job = active.job;
     active = null;
@@ -122,6 +123,15 @@ async function finish(jobId: number, result: ThumbnailRenderResult): Promise<voi
     }
 
     drain();
+}
+
+/** Stops dispatching and ignores in-flight results; called before the database closes. */
+export function stopThumbnailQueue(): void {
+    stopped = true;
+    if (active) clearTimeout(active.timer);
+    active = null;
+    queue.length = 0;
+    queuedIds.clear();
 }
 
 export function registerThumbnailIpc(): void {

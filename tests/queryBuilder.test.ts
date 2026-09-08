@@ -56,9 +56,22 @@ describe('buildModelsQuery', () => {
         expect(params[0]).toBe('%50\\%\\_off%');
     });
 
-    it('applies a limit when requested', () => {
+    it('applies limit and offset when requested', () => {
         const { sql, params } = buildModelsQuery({ limit: 25 });
         expect(sql.endsWith('LIMIT ?')).toBe(true);
         expect(params).toEqual([25]);
+
+        const paged = buildModelsQuery({ limit: 25, offset: 50 });
+        expect(paged.sql.endsWith('LIMIT ? OFFSET ?')).toBe(true);
+        expect(paged.params).toEqual([25, 50]);
+    });
+
+    it('builds a matching count query without limit or ordering', () => {
+        const { countSql, countParams } = buildModelsQuery({ searchQuery: 'benchy tag:printed', limit: 25, offset: 50 });
+        expect(countSql.startsWith('SELECT COUNT(*) AS total FROM models m JOIN')).toBe(true);
+        expect(countSql).toContain('lower(t.name) = ?');
+        expect(countSql).not.toContain('ORDER BY');
+        expect(countSql).not.toContain('LIMIT');
+        expect(countParams).toEqual(['"benchy"', 'printed']);
     });
 });

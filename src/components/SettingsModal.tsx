@@ -4,7 +4,7 @@ import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
 export default function SettingsModal() {
-    const { closeSettings, theme, setTheme, indexProgress, models, libraryStats, loadModels } = useStore();
+    const { closeSettings, theme, setTheme, indexProgress, libraryStats, loadModels } = useStore();
     const [regenerateThumbnails, setRegenerateThumbnails] = useState(false);
     const [rebuildRequested, setRebuildRequested] = useState(false);
     const [confirmForget, setConfirmForget] = useState(false);
@@ -95,7 +95,7 @@ export default function SettingsModal() {
                                 Every file is hashed and measured in the background, and its name, folder, tags, notes and any README beside it are added to the search index.
                                 {indexProgress?.isRunning
                                     ? ` Indexing ${indexProgress.completed + indexProgress.failed} of ${indexProgress.total}…`
-                                    : ` ${models.length.toLocaleString()} models in the current view.`}
+                                    : ` ${(libraryStats?.models ?? 0).toLocaleString()} models in the library.`}
                             </div>
                             <label className="flex items-center gap-2 text-sm text-text-primary select-none cursor-pointer">
                                 <input type="checkbox" checked={regenerateThumbnails} onChange={(e) => setRegenerateThumbnails(e.target.checked)} className="accent-blue-500" />

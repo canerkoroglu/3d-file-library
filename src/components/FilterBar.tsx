@@ -37,7 +37,7 @@ export default function FilterBar() {
         viewMode, setViewMode,
         tags, selectedTags, toggleTag,
         sortBy, sortOrder, setSortBy, setSortOrder,
-        models,
+        totalModels,
     } = useStore();
     const [showHelp, setShowHelp] = useState(false);
 
@@ -89,7 +89,7 @@ export default function FilterBar() {
                 </div>
 
                 <span className="text-xs text-text-secondary whitespace-nowrap tabular-nums">
-                    {models.length.toLocaleString()} {models.length === 1 ? 'model' : 'models'}
+                    {totalModels.toLocaleString()} {totalModels === 1 ? 'model' : 'models'}
                 </span>
 
                 {/* Sort */}

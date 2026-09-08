@@ -10,6 +10,7 @@ import type {
     FilterOptions,
     LibraryStats,
     Model,
+    ModelPage,
     ModelWithTags,
     PrintMetadata,
     SourceMetadata,
@@ -159,7 +160,15 @@ function escapeLike(term: string): string {
  * Builds the SQL for a filtered, sorted model listing. Pure so it can be unit tested.
  * Free text goes through the FTS5 trigram index; terms shorter than three characters fall back to LIKE.
  */
-export function buildModelsQuery(filters: FilterOptions = {}): { sql: string; params: unknown[] } {
+export interface ModelsQuery {
+    sql: string;
+    params: unknown[];
+    /** Counts every match for the same filters, ignoring limit and offset. */
+    countSql: string;
+    countParams: unknown[];
+}
+
+export function buildModelsQuery(filters: FilterOptions = {}): ModelsQuery {
     const parsed = parseSearchQuery(filters.searchQuery ?? '');
     const { match, shortTerms } = buildFtsMatch(parsed.terms);
 
@@ -270,16 +279,24 @@ export function buildModelsQuery(filters: FilterOptions = {}): { sql: string; pa
             orderBy = `m.created_at ${direction}`;
     }
 
-    let sql = `SELECT ${MODEL_COLUMNS} FROM models m ${ftsJoin}`;
-    if (conditions.length > 0) sql += ` WHERE ${conditions.join(' AND ')}`;
+    const where = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+    const countSql = `SELECT COUNT(*) AS total FROM models m ${ftsJoin}${where}`;
+    const countParams = [...params];
+
+    let sql = `SELECT ${MODEL_COLUMNS} FROM models m ${ftsJoin}${where}`;
     // Files that are currently unavailable sink to the end of every listing.
     sql += ` ORDER BY (m.missing_since IS NOT NULL), ${orderBy}, m.id DESC`;
     if (filters.limit && filters.limit > 0) {
         sql += ' LIMIT ?';
         params.push(filters.limit);
+        if (filters.offset && filters.offset > 0) {
+            sql += ' OFFSET ?';
+            params.push(filters.offset);
+        }
     }
 
-    return { sql: sql.replace(/\s+/g, ' ').trim(), params };
+    const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
+    return { sql: squash(sql), params, countSql: squash(countSql), countParams };
 }
 
 export function getModels(filters: FilterOptions = {}): ModelWithTags[] {
@@ -287,6 +304,14 @@ export function getModels(filters: FilterOptions = {}): ModelWithTags[] {
     const { sql, params } = buildModelsQuery(filters);
     const rows = db.prepare(sql).all(...params) as ModelRow[];
     return hydrate(rows.map(rowToModel));
+}
+
+export function getModelsPage(filters: FilterOptions = {}): ModelPage {
+    const db = getDatabase();
+    const query = buildModelsQuery(filters);
+    const rows = db.prepare(query.sql).all(...query.params) as ModelRow[];
+    const { total } = db.prepare(query.countSql).get(...query.countParams) as { total: number };
+    return { items: hydrate(rows.map(rowToModel)), total, offset: filters.offset ?? 0 };
 }
 
 export function getModel(id: number): ModelWithTags | null {

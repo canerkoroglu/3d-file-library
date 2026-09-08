@@ -7,7 +7,7 @@ import { libraryEvents, notifyModelsUpdated } from './library';
 import { setupIpcHandlers } from './ipcHandlers';
 import { initializeWatchers, stopAllWatchers } from './fileWatcher';
 import { enqueueAll, startIndexer, stopIndexer } from './indexer';
-import { getThumbnailQueueSize, registerThumbnailIpc, requestThumbnailRender, setThumbnailWindow } from './thumbnails';
+import { getThumbnailQueueSize, registerThumbnailIpc, requestThumbnailRender, setThumbnailWindow, stopThumbnailQueue } from './thumbnails';
 import type { FileType, IndexProgress } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -136,6 +136,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
     stopIndexer();
+    stopThumbnailQueue();
     await stopAllWatchers();
     closeDatabase();
 });
