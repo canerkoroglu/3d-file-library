@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Stage } from '@react-three/drei';
-import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus, Pencil, FileText, ChevronDown, ChevronRight, AlertTriangle, FileX, Settings as SettingsIcon, Check } from 'lucide-react';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus, Pencil, FileText, ChevronDown, ChevronRight, AlertTriangle, FileX, Settings as SettingsIcon, Check, RotateCw, Grid3x3, Box, Palette, Scissors, Maximize2 } from 'lucide-react';
 import { useStore } from '../store/store';
-import GenericModel from './GenericModel';
+import GenericModel, { type ViewerDisplayOptions } from './GenericModel';
 import MetadataEditor from './MetadataEditor';
 import { formatDimensions, formatFileSize, formatTriangles, formatVolume } from '../lib/format';
 
@@ -33,6 +34,14 @@ export default function ModelViewer() {
     const [slicerMenuOpen, setSlicerMenuOpen] = useState(false);
     const [slicerError, setSlicerError] = useState<string | null>(null);
 
+    // Viewer tools
+    const controlsRef = useRef<OrbitControlsImpl>(null);
+    const [autoRotate, setAutoRotate] = useState(true);
+    const [showGrid, setShowGrid] = useState(true);
+    const [display, setDisplay] = useState<ViewerDisplayOptions>({ wireframe: false, fileColors: true, uniformColor: '#3b82f6', clipHeight: 1 });
+    const [showClip, setShowClip] = useState(false);
+    const updateDisplay = (patch: Partial<ViewerDisplayOptions>) => setDisplay((current) => ({ ...current, ...patch }));
+
     const modelId = selectedModel?.id;
 
     useEffect(() => {
@@ -44,6 +53,8 @@ export default function ModelViewer() {
         setCaptureState('idle');
         setSlicerMenuOpen(false);
         setSlicerError(null);
+        setDisplay((current) => ({ ...current, clipHeight: 1 }));
+        setShowClip(false);
         if (modelId && selectedModel?.hasReadme) {
             void window.electronAPI.getModelReadme(modelId).then(setReadme);
         }
@@ -51,7 +62,16 @@ export default function ModelViewer() {
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const typing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
             if (e.key === 'Escape' && !isEditingMetadata) closeViewer();
+            if (typing || isEditingMetadata || e.metaKey || e.ctrlKey || e.altKey) return;
+            switch (e.key.toLowerCase()) {
+                case 'w': setDisplay((c) => ({ ...c, wireframe: !c.wireframe })); break;
+                case 'g': setShowGrid((v) => !v); break;
+                case 'r': controlsRef.current?.reset(); break;
+                case ' ': e.preventDefault(); setAutoRotate((v) => !v); break;
+            }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
@@ -170,31 +190,97 @@ export default function ModelViewer() {
                             ref={canvasRef}
                             shadows
                             camera={{ position: [6, 5, 7], fov: 45 }}
-                            gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
+                            gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance', localClippingEnabled: true }}
                         >
                             <Stage environment="city" intensity={0.6} adjustCamera={false}>
-                                <Grid
-                                    args={[20, 20]}
-                                    cellSize={0.5}
-                                    cellThickness={0.6}
-                                    cellColor="#404040"
-                                    sectionSize={2}
-                                    sectionThickness={1}
-                                    sectionColor="#505050"
-                                    fadeDistance={30}
-                                    fadeStrength={1}
-                                    followCamera={false}
-                                    position={[0, -0.01, 0]}
-                                />
+                                {showGrid && (
+                                    <Grid
+                                        args={[20, 20]}
+                                        cellSize={0.5}
+                                        cellThickness={0.6}
+                                        cellColor="#404040"
+                                        sectionSize={2}
+                                        sectionThickness={1}
+                                        sectionColor="#505050"
+                                        fadeDistance={30}
+                                        fadeStrength={1}
+                                        followCamera={false}
+                                        position={[0, -0.01, 0]}
+                                    />
+                                )}
                                 <GenericModel
                                     key={selectedModel.id}
                                     filepath={selectedModel.filepath}
                                     fileType={selectedModel.fileType}
+                                    options={display}
                                     onError={handleLoadError}
                                 />
                             </Stage>
-                            <OrbitControls enableDamping dampingFactor={0.05} minDistance={1} maxDistance={30} makeDefault autoRotate autoRotateSpeed={0.5} />
+                            <OrbitControls ref={controlsRef} enableDamping dampingFactor={0.05} minDistance={1} maxDistance={30} makeDefault autoRotate={autoRotate} autoRotateSpeed={0.5} />
                         </Canvas>
+                        )}
+
+                        {!missing && (
+                            <div className="absolute top-4 left-4 flex flex-col gap-2" data-testid="viewer-tools">
+                                <div className="glass rounded-lg p-1 flex items-center gap-0.5">
+                                    {([
+                                        { key: 'rotate', icon: <RotateCw size={16} />, active: autoRotate, title: 'Auto-rotate (Space)', onClick: () => setAutoRotate((v) => !v) },
+                                        { key: 'wireframe', icon: <Box size={16} />, active: display.wireframe, title: 'Wireframe (W)', onClick: () => updateDisplay({ wireframe: !display.wireframe }) },
+                                        { key: 'grid', icon: <Grid3x3 size={16} />, active: showGrid, title: 'Grid (G)', onClick: () => setShowGrid((v) => !v) },
+                                        { key: 'clip', icon: <Scissors size={16} />, active: showClip || display.clipHeight < 1, title: 'Section view', onClick: () => setShowClip((v) => !v) },
+                                        { key: 'reset', icon: <Maximize2 size={16} />, active: false, title: 'Reset view (R)', onClick: () => controlsRef.current?.reset() },
+                                    ] as const).map((tool) => (
+                                        <button
+                                            key={tool.key}
+                                            onClick={tool.onClick}
+                                            title={tool.title}
+                                            aria-label={tool.title}
+                                            aria-pressed={tool.active}
+                                            className={`p-2 rounded-md transition-colors ${tool.active ? 'bg-accent-blue text-white' : 'text-white/80 hover:bg-white/20'}`}
+                                        >
+                                            {tool.icon}
+                                        </button>
+                                    ))}
+                                    <label className="p-2 rounded-md text-white/80 hover:bg-white/20 cursor-pointer flex items-center" title="Model colour">
+                                        <Palette size={16} />
+                                        <input
+                                            type="color"
+                                            value={display.uniformColor}
+                                            onChange={(e) => updateDisplay({ uniformColor: e.target.value, fileColors: false })}
+                                            className="w-0 h-0 opacity-0 absolute"
+                                            aria-label="Model colour"
+                                        />
+                                    </label>
+                                    {selectedModel.fileType === '3mf' && (
+                                        <button
+                                            onClick={() => updateDisplay({ fileColors: !display.fileColors })}
+                                            title={display.fileColors ? 'Showing colours from the file' : 'Show colours from the file'}
+                                            aria-pressed={display.fileColors}
+                                            className={`px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${display.fileColors ? 'bg-accent-blue text-white' : 'text-white/80 hover:bg-white/20'}`}
+                                        >
+                                            File colours
+                                        </button>
+                                    )}
+                                </div>
+                                {showClip && (
+                                    <div className="glass rounded-lg px-3 py-2 flex items-center gap-3 text-xs text-white/90">
+                                        <span className="whitespace-nowrap">Section height</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={100}
+                                            value={Math.round(display.clipHeight * 100)}
+                                            onChange={(e) => updateDisplay({ clipHeight: Number(e.target.value) / 100 })}
+                                            className="w-40 accent-blue-500"
+                                            aria-label="Section height"
+                                        />
+                                        <span className="tabular-nums w-10 text-right">{Math.round(display.clipHeight * 100)}%</span>
+                                        {selectedModel.bbox && (
+                                            <span className="text-white/60 tabular-nums">≈ {(selectedModel.bbox.z * display.clipHeight).toFixed(1)} mm</span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         )}
 
                         {loadError && (

@@ -12,7 +12,8 @@ A desktop library for 3D printing files (STL, 3MF, OBJ). Point it at the folders
 - **Organization**: many-to-many collections, colour-coded tags, source metadata (site, author, license, URL, notes).
 - **ZIP import**: drop a Thingiverse, Printables or MyMiniFactory download on the window (or use *Import ZIP…* in the sidebar) and it is extracted into a watched folder, one sub-folder per archive, so the README, license and preview images are indexed with the models. Links to the model page found in a README fill in the source and URL automatically. Dropping STL, 3MF or OBJ files registers them in place.
 - **Duplicate finder**: exact duplicates are detected from stored content hashes without rescanning your disk.
-- **3D viewer**: orbit, zoom and pan with Z-up orientation matching your slicer.
+- **3D viewer**: orbit, zoom and pan with Z-up orientation matching your slicer. Toolbar with auto-rotate (Space), wireframe (W), grid (G), reset view (R), a section-height slider that cuts the model open, a model colour picker, and file colours for 3MF projects.
+- **Bulk actions**: hover a card for its checkbox, ⌘/Ctrl-click to toggle, Shift-click for ranges, ⌘/Ctrl+A for everything loaded, then add or remove tags, add to a collection or remove from the library in one go.
 - **Slicer integration**: installed slicers (Bambu Studio, OrcaSlicer, PrusaSlicer, SuperSlicer, Cura, ideaMaker, Lychee, CHITUBOX and more) are detected on macOS, Windows and Linux. Pick a default in Settings or choose per model from the viewer; anything the scan misses can be added by hand.
 - **Cross-platform**: macOS, Windows and Linux builds.
 

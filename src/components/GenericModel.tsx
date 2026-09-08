@@ -1,16 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
 import * as THREE from 'three';
 import type { FileType } from '../types';
 
+export interface ViewerDisplayOptions {
+    wireframe: boolean;
+    /** Use colours stored in the file (3MF) instead of the uniform colour. */
+    fileColors: boolean;
+    uniformColor: string;
+    /** 0..1: fraction of the model height above which geometry is cut away; 1 shows everything. */
+    clipHeight: number;
+}
+
 interface GenericModelProps {
     filepath: string;
     fileType: FileType;
+    options: ViewerDisplayOptions;
     onError?: (message: string) => void;
 }
 
 const TARGET_SIZE = 5;
-const MODEL_COLOR = '#3b82f6';
 
 function disposeObject(object: THREE.Object3D): void {
     object.traverse((child) => {
@@ -22,18 +31,20 @@ function disposeObject(object: THREE.Object3D): void {
     });
 }
 
+function makeMaterial(color: string): THREE.MeshStandardMaterial {
+    return new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide });
+}
+
 async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THREE.Object3D> {
     if (fileType === 'stl') {
         const geometry = new STLLoader().parse(buffer);
         geometry.computeVertexNormals();
-        return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: MODEL_COLOR, roughness: 0.5, metalness: 0.05 }));
+        return new THREE.Mesh(geometry, makeMaterial('#3b82f6'));
     }
     if (fileType === 'obj') {
         const object = new OBJLoader().parse(new TextDecoder().decode(buffer));
         object.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-                child.material = new THREE.MeshStandardMaterial({ color: MODEL_COLOR, roughness: 0.5, metalness: 0.05 });
-            }
+            if (child instanceof THREE.Mesh) child.material = makeMaterial('#3b82f6');
         });
         return object;
     }
@@ -46,11 +57,19 @@ async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THRE
     }
 }
 
+interface Prepared {
+    holder: THREE.Group;
+    /** Height of the model in scene units after scaling (used for the section plane). */
+    height: number;
+    /** Materials as they came from the file, kept so "file colours" can be restored. */
+    originalMaterials: Map<THREE.Mesh, THREE.Material | THREE.Material[]>;
+}
+
 /**
  * Wraps a loaded object so that the print bed's Z axis points up, the model sits on
  * the grid, and it is scaled to a consistent on-screen size.
  */
-function prepare(object: THREE.Object3D): THREE.Group {
+function prepare(object: THREE.Object3D): Prepared {
     const oriented = new THREE.Group();
     oriented.rotation.x = -Math.PI / 2;
     oriented.add(object);
@@ -67,15 +86,23 @@ function prepare(object: THREE.Object3D): THREE.Group {
 
     holder.scale.setScalar(scale);
     holder.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-    return holder;
+
+    const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+    holder.traverse((child) => {
+        if (child instanceof THREE.Mesh) originalMaterials.set(child, child.material);
+    });
+
+    return { holder, height: size.y * scale, originalMaterials };
 }
 
-export default function GenericModel({ filepath, fileType, onError }: GenericModelProps) {
-    const [object, setObject] = useState<THREE.Group | null>(null);
+export default function GenericModel({ filepath, fileType, options, onError }: GenericModelProps) {
+    const [prepared, setPrepared] = useState<Prepared | null>(null);
+    const uniformMaterial = useMemo(() => makeMaterial(options.uniformColor), [options.uniformColor]);
+    const clipPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 0), []);
 
     useEffect(() => {
         let cancelled = false;
-        let loaded: THREE.Group | null = null;
+        let loaded: Prepared | null = null;
 
         const load = async () => {
             try {
@@ -87,7 +114,7 @@ export default function GenericModel({ filepath, fileType, onError }: GenericMod
                     return;
                 }
                 loaded = prepare(raw);
-                setObject(loaded);
+                setPrepared(loaded);
             } catch (error) {
                 console.error('Failed to load model:', filepath, error);
                 if (!cancelled) onError?.(error instanceof Error ? error.message : 'Failed to load model');
@@ -97,11 +124,32 @@ export default function GenericModel({ filepath, fileType, onError }: GenericMod
 
         return () => {
             cancelled = true;
-            if (loaded) disposeObject(loaded);
-            setObject(null);
+            if (loaded) disposeObject(loaded.holder);
+            setPrepared(null);
         };
     }, [filepath, fileType, onError]);
 
-    if (!object) return null;
-    return <primitive object={object} />;
+    // Apply display options to every mesh whenever they change.
+    useEffect(() => {
+        if (!prepared) return;
+        const clipping = options.clipHeight < 1;
+        clipPlane.constant = prepared.height * Math.max(0, options.clipHeight);
+
+        for (const [mesh, original] of prepared.originalMaterials) {
+            const useFile = options.fileColors && fileType === '3mf';
+            mesh.material = useFile ? original : uniformMaterial;
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            for (const material of materials) {
+                (material as THREE.Material & { wireframe?: boolean }).wireframe = options.wireframe;
+                material.clippingPlanes = clipping ? [clipPlane] : null;
+                material.side = THREE.DoubleSide;
+                material.needsUpdate = true;
+            }
+        }
+    }, [prepared, options, uniformMaterial, clipPlane, fileType]);
+
+    useEffect(() => () => uniformMaterial.dispose(), [uniformMaterial]);
+
+    if (!prepared) return null;
+    return <primitive object={prepared.holder} />;
 }
