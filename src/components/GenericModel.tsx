@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
+import { GLTFLoader, OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
+import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import * as THREE from 'three';
 import type { FileType } from '../types';
 import { loadThreeMfObject } from '../lib/threeMf';
@@ -48,6 +49,13 @@ async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THRE
             if (child instanceof THREE.Mesh) child.material = makeMaterial('#3b82f6');
         });
         return object;
+    }
+    if (fileType === 'glb') {
+        const gltf = await new GLTFLoader().parseAsync(buffer, '');
+        return gltf.scene;
+    }
+    if (fileType === 'usdz') {
+        return new USDZLoader().parse(new Uint8Array(buffer));
     }
     const blob = new Blob([buffer], { type: 'model/3mf' });
     const url = URL.createObjectURL(blob);
@@ -142,7 +150,8 @@ export default function GenericModel({ filepath, fileType, options, onError }: G
         clipPlane.constant = prepared.height * Math.max(0, options.clipHeight);
 
         for (const [mesh, original] of prepared.originalMaterials) {
-            const useFile = options.fileColors && fileType === '3mf';
+            // glTF/USDZ carry their own materials and textures — always show them; 3MF is toggleable.
+            const useFile = fileType === '3mf' ? options.fileColors : fileType === 'glb' || fileType === 'usdz';
             mesh.material = useFile ? original : uniformMaterial;
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             for (const material of materials) {

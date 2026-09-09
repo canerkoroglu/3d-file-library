@@ -1,4 +1,4 @@
-export type FileType = 'stl' | '3mf' | 'obj';
+export type FileType = 'stl' | '3mf' | 'obj' | 'glb' | 'usdz';
 
 export type ThumbnailSource = 'embedded' | 'sidecar' | 'render' | 'capture' | 'folder';
 

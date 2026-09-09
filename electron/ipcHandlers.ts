@@ -73,10 +73,12 @@ export function setupIpcHandlers(): void {
         const result = await dialog.showOpenDialog(windowFor(event)!, {
             properties: ['openFile', 'multiSelections'],
             filters: [
-                { name: '3D Models', extensions: ['stl', '3mf', 'obj'] },
+                { name: '3D Models', extensions: ['stl', '3mf', 'obj', 'glb', 'gltf', 'usdz'] },
                 { name: 'STL Files', extensions: ['stl'] },
                 { name: '3MF Files', extensions: ['3mf'] },
                 { name: 'OBJ Files', extensions: ['obj'] },
+                { name: 'glTF Files', extensions: ['glb', 'gltf'] },
+                { name: 'USDZ Files', extensions: ['usdz'] },
             ],
         });
         if (result.canceled) return [];

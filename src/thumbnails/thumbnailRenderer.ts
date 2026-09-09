@@ -4,7 +4,8 @@
  * and sends the PNG back.
  */
 import * as THREE from 'three';
-import { OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
+import { GLTFLoader, OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
+import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import type { FileType, ThumbnailRenderRequest } from '../types';
 import { loadThreeMfObject } from '../lib/threeMf';
 
@@ -41,6 +42,13 @@ async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THRE
             }
         });
         return object;
+    }
+    if (fileType === 'glb') {
+        const gltf = await new GLTFLoader().parseAsync(buffer, '');
+        return gltf.scene;
+    }
+    if (fileType === 'usdz') {
+        return new USDZLoader().parse(new Uint8Array(buffer));
     }
     const blob = new Blob([buffer], { type: 'model/3mf' });
     const url = URL.createObjectURL(blob);

@@ -198,6 +198,31 @@ const MIGRATIONS: Array<{ version: number; name: string; up: (db: Database.Datab
             `);
         },
     },
+    {
+        version: 6,
+        name: 'allow glb, usdz and step file types',
+        up: (db) => {
+            // SQLite cannot alter a CHECK in place; rebuild the models table from its own
+            // (migration-evolved) schema with the widened file_type list, preserving rows and ids.
+            // Foreign keys are OFF here (see initDatabase), so DROP TABLE does not cascade.
+            const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='models'").get() as { sql: string };
+            const rebuilt = row.sql
+                .replace(/CHECK\s*\(\s*file_type\s+IN\s*\([^)]*\)\s*\)/i, "CHECK(file_type IN ('stl', '3mf', 'obj', 'glb', 'usdz', 'step'))")
+                .replace(/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?["'`]?models["'`]?/i, 'CREATE TABLE "models_new"');
+            db.exec(rebuilt);
+            db.exec('INSERT INTO "models_new" SELECT * FROM models');
+            db.exec('DROP TABLE models');
+            db.exec('ALTER TABLE "models_new" RENAME TO models');
+            db.exec(`
+                CREATE INDEX IF NOT EXISTS idx_models_filepath ON models(filepath);
+                CREATE INDEX IF NOT EXISTS idx_models_content_hash ON models(content_hash);
+                CREATE INDEX IF NOT EXISTS idx_models_folder_path ON models(folder_path);
+                CREATE INDEX IF NOT EXISTS idx_models_created_at ON models(created_at);
+                CREATE INDEX IF NOT EXISTS idx_models_file_type ON models(file_type);
+                CREATE INDEX IF NOT EXISTS idx_models_missing_since ON models(missing_since);
+            `);
+        },
+    },
 ];
 
 const DEFAULT_TAGS = [
@@ -215,8 +240,10 @@ export function initDatabase(dbPath: string): Database.Database {
 
     db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
 
+    // Foreign keys stay OFF while migrations run: a migration may rebuild the models table, and
+    // DROP TABLE with FKs enabled would cascade-delete tag/collection links. The pragma is a no-op
+    // inside a transaction (where each migration runs), so enable it once, after they all finish.
     const currentVersion = db.pragma('user_version', { simple: true }) as number;
     for (const migration of MIGRATIONS) {
         if (migration.version <= currentVersion) continue;
@@ -226,6 +253,7 @@ export function initDatabase(dbPath: string): Database.Database {
             db!.pragma(`user_version = ${migration.version}`);
         })();
     }
+    db.pragma('foreign_keys = ON');
 
     const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name, color) VALUES (?, ?)');
     for (const tag of DEFAULT_TAGS) insertTag.run(tag.name, tag.color);
