@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
 import type { FileType, ThumbnailRenderRequest } from '../types';
+import { loadThreeMfObject } from '../lib/threeMf';
 
 const SIZE = 512;
 const BACKGROUND = 0x232323;
@@ -45,6 +46,9 @@ async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THRE
     const url = URL.createObjectURL(blob);
     try {
         return await new ThreeMFLoader().loadAsync(url);
+    } catch {
+        // 3MF production extension (Bambu/Orca/Prusa split parts) — resolve it ourselves.
+        return await loadThreeMfObject(buffer);
     } finally {
         URL.revokeObjectURL(url);
     }
