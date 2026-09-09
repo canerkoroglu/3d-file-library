@@ -13,6 +13,7 @@ import path from 'node:path';
 import { launchApp, PROJECT_ROOT } from './driver.mjs';
 import * as fixtures from './fixtures.mjs';
 import { scenarios } from './scenarios.mjs';
+import { startFakeLlm } from './fakeLlm.mjs';
 
 const args = process.argv.slice(2);
 const noBuild = args.includes('--no-build');
@@ -43,6 +44,10 @@ fs.mkdirSync(profileDir, { recursive: true });
 step(`Creating fixtures in ${tmpDir}`);
 const library = await fixtures.createLibrary(libraryDir);
 
+step('Starting the fake language-model server');
+const fakeLlm = await startFakeLlm();
+console.log(`  ${fakeLlm.baseUrl}`);
+
 step('Launching the app');
 const app = await launchApp({
     profileDir,
@@ -51,7 +56,7 @@ const app = await launchApp({
     appPath: process.env.MODELIST_APP,
 });
 
-const context = { app, library, profileDir, tmpDir, fixtures };
+const context = { app, library, profileDir, tmpDir, fixtures, fakeLlm };
 const selected = scenarios.filter((s) => !filter || s.name.includes(filter));
 const results = [];
 
@@ -72,6 +77,7 @@ for (const scenario of selected) {
 }
 
 await app.close();
+await fakeLlm.close();
 
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} scenarios passed`);

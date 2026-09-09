@@ -5,6 +5,7 @@ import { getDatabase } from './database';
 import { getThumbnailDir, isInsideDir } from './paths';
 import { buildFtsMatch, parseSearchQuery } from '../src/lib/searchQuery';
 import type {
+    AiEnrichment,
     AppNotice,
     DuplicateReport,
     FileType,
@@ -77,13 +78,14 @@ interface ModelRow {
     indexed_at: string | null;
     missing_since: string | null;
     source_metadata: string | null;
+    ai_metadata: string | null;
 }
 
 const MODEL_COLUMNS = `
     m.id, m.filename, m.filepath, m.folder_path, m.display_name, m.file_size, m.file_type,
     m.created_at, m.modified_at, m.thumbnail_path, m.thumbnail_source, m.thumbnail_updated_at,
     m.content_hash, m.triangle_count, m.bbox_x, m.bbox_y, m.bbox_z, m.volume_mm3, m.print_meta,
-    (m.readme_text IS NOT NULL) AS has_readme, m.indexed_at, m.missing_since, m.source_metadata
+    (m.readme_text IS NOT NULL) AS has_readme, m.indexed_at, m.missing_since, m.source_metadata, m.ai_metadata
 `;
 
 function safeJson<T>(text: string | null): T | undefined {
@@ -121,6 +123,7 @@ function rowToModel(row: ModelRow): Model {
         indexedAt: row.indexed_at ?? undefined,
         missingSince: row.missing_since ?? undefined,
         sourceMetadata: safeJson<SourceMetadata>(row.source_metadata),
+        aiMetadata: safeJson<AiEnrichment>(row.ai_metadata),
     };
 }
 
@@ -184,9 +187,9 @@ export function buildModelsQuery(filters: FilterOptions = {}): ModelsQuery {
 
     if (match) {
         // Weights follow the column order of models_fts:
-        // filename, display_name, folder_path, tags, source, author, license, notes, title, designer, description, printer, readme
+        // filename, display_name, folder_path, tags, source, author, license, notes, title, designer, description, printer, readme, ai
         ftsJoin = `JOIN (
-            SELECT rowid AS fts_id, bm25(models_fts, 10.0, 10.0, 5.0, 4.0, 2.0, 3.0, 1.0, 1.5, 6.0, 3.0, 1.5, 2.0, 0.5) AS rank
+            SELECT rowid AS fts_id, bm25(models_fts, 10.0, 10.0, 5.0, 4.0, 2.0, 3.0, 1.0, 1.5, 6.0, 3.0, 1.5, 2.0, 0.5, 4.0) AS rank
             FROM models_fts WHERE models_fts MATCH ?
         ) r ON r.fts_id = m.id`;
         params.push(match);
@@ -260,6 +263,26 @@ export function buildModelsQuery(filters: FilterOptions = {}): ModelsQuery {
     if (parsed.hasReadme) conditions.push('m.readme_text IS NOT NULL');
     if (parsed.missing === true) conditions.push('m.missing_since IS NOT NULL');
     if (parsed.missing === false) conditions.push('m.missing_since IS NULL');
+    if (parsed.category) {
+        conditions.push(`json_extract(m.ai_metadata, '$.category') LIKE ? ESCAPE '\\'`);
+        params.push(`%${escapeLike(parsed.category)}%`);
+    }
+    if (parsed.addedAfter) {
+        conditions.push('m.created_at >= ?');
+        params.push(parsed.addedAfter);
+    }
+    if (parsed.addedBefore) {
+        conditions.push('m.created_at < ?');
+        params.push(parsed.addedBefore);
+    }
+    if (parsed.modifiedAfter) {
+        conditions.push('m.modified_at >= ?');
+        params.push(parsed.modifiedAfter);
+    }
+    if (parsed.modifiedBefore) {
+        conditions.push('m.modified_at < ?');
+        params.push(parsed.modifiedBefore);
+    }
 
     const direction = (filters.sortOrder ?? 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     const sortBy = filters.sortBy ?? (match ? 'relevance' : 'created');
@@ -357,7 +380,7 @@ function indexableFolderPath(folderPath: string): string {
 export function refreshSearchIndex(modelId: number): void {
     const db = getDatabase();
     const row = db.prepare(`
-        SELECT filename, display_name, folder_path, filepath, source_metadata, print_meta, readme_text
+        SELECT filename, display_name, folder_path, filepath, source_metadata, print_meta, readme_text, ai_metadata
         FROM models WHERE id = ?
     `).get(modelId) as {
         filename: string;
@@ -367,6 +390,7 @@ export function refreshSearchIndex(modelId: number): void {
         source_metadata: string | null;
         print_meta: string | null;
         readme_text: string | null;
+        ai_metadata: string | null;
     } | undefined;
 
     if (!row) {
@@ -380,12 +404,14 @@ export function refreshSearchIndex(modelId: number): void {
     const source = safeJson<SourceMetadata>(row.source_metadata) ?? {};
     const print = safeJson<PrintMetadata>(row.print_meta) ?? {};
     const printer = [print.slicer, print.printerModel, ...(print.filamentTypes ?? [])].filter(Boolean).join(' ');
+    const ai = safeJson<AiEnrichment>(row.ai_metadata);
+    const aiText = ai ? [ai.name, ai.summary, ai.category, ...(ai.keywords ?? [])].filter(Boolean).join(' ') : '';
 
     db.transaction(() => {
         db.prepare('DELETE FROM models_fts WHERE rowid = ?').run(modelId);
         db.prepare(`
-            INSERT INTO models_fts (rowid, filename, display_name, folder_path, tags, source, author, license, notes, title, designer, description, printer, readme)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO models_fts (rowid, filename, display_name, folder_path, tags, source, author, license, notes, title, designer, description, printer, readme, ai)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             modelId,
             path.basename(row.filename, path.extname(row.filename)),
@@ -401,6 +427,7 @@ export function refreshSearchIndex(modelId: number): void {
             print.description ?? '',
             printer,
             row.readme_text ?? '',
+            aiText,
         );
     })();
 }
@@ -652,6 +679,95 @@ export async function renameModelFile(modelId: number, newName: string): Promise
     db.prepare('UPDATE models SET filename = ?, filepath = ?, modified_at = ? WHERE id = ?')
         .run(safeName, newPath, new Date().toISOString(), modelId);
     refreshSearchIndex(modelId);
+}
+
+// ============ AI enrichment ============
+
+export interface EnrichmentSource {
+    filename: string;
+    folder: string;
+    fileType: FileType;
+    dimensionsMm?: { x: number; y: number; z: number };
+    triangleCount?: number;
+    title?: string;
+    designer?: string;
+    description?: string;
+    source?: string;
+    readmeExcerpt?: string;
+    existingTags: string[];
+}
+
+/** Everything the assistant should know about a model, or null when the model is gone. */
+export function getEnrichmentSource(modelId: number): EnrichmentSource | null {
+    const db = getDatabase();
+    const row = db.prepare(`
+        SELECT filename, folder_path, filepath, file_type, bbox_x, bbox_y, bbox_z, triangle_count,
+               print_meta, source_metadata, substr(readme_text, 1, 1200) AS readme
+        FROM models WHERE id = ?
+    `).get(modelId) as {
+        filename: string; folder_path: string | null; filepath: string; file_type: FileType;
+        bbox_x: number | null; bbox_y: number | null; bbox_z: number | null; triangle_count: number | null;
+        print_meta: string | null; source_metadata: string | null; readme: string | null;
+    } | undefined;
+    if (!row) return null;
+
+    const print = safeJson<PrintMetadata>(row.print_meta) ?? {};
+    const source = safeJson<SourceMetadata>(row.source_metadata) ?? {};
+    const tags = (db.prepare('SELECT name FROM tags ORDER BY name').all() as Array<{ name: string }>).map((t) => t.name);
+
+    return {
+        filename: row.filename,
+        folder: indexableFolderPath(row.folder_path ?? path.dirname(row.filepath)),
+        fileType: row.file_type,
+        dimensionsMm: row.bbox_x !== null && row.bbox_y !== null && row.bbox_z !== null ? { x: row.bbox_x, y: row.bbox_y, z: row.bbox_z } : undefined,
+        triangleCount: row.triangle_count ?? undefined,
+        title: print.title,
+        designer: print.designer ?? source.author,
+        description: print.description ?? source.notes,
+        source: source.source,
+        readmeExcerpt: row.readme ?? undefined,
+        existingTags: tags,
+    };
+}
+
+export function setAiMetadata(modelId: number, enrichment: AiEnrichment | null): void {
+    getDatabase()
+        .prepare('UPDATE models SET ai_metadata = ?, ai_enriched_at = ? WHERE id = ?')
+        .run(enrichment ? JSON.stringify(enrichment) : null, enrichment ? enrichment.generatedAt : null, modelId);
+    refreshSearchIndex(modelId);
+}
+
+/** Adds the assistant's suggested tags to the model. Returns how many were newly added. */
+export function applySuggestedTags(modelId: number): number {
+    const db = getDatabase();
+    const row = db.prepare('SELECT ai_metadata FROM models WHERE id = ?').get(modelId) as { ai_metadata: string | null } | undefined;
+    const enrichment = safeJson<AiEnrichment>(row?.ai_metadata ?? null);
+    if (!enrichment?.suggestedTags?.length) return 0;
+
+    let added = 0;
+    const findTag = db.prepare('SELECT id FROM tags WHERE lower(name) = lower(?)');
+    const link = db.prepare('INSERT OR IGNORE INTO model_tags (model_id, tag_id) VALUES (?, ?)');
+    for (const name of enrichment.suggestedTags) {
+        const tag = findTag.get(name) as { id: number } | undefined;
+        if (tag && link.run(modelId, tag.id).changes > 0) added++;
+    }
+    if (added > 0) refreshSearchIndex(modelId);
+    return added;
+}
+
+/** Categories present in the library, most common first (for the query translator). */
+export function listAiCategories(): string[] {
+    return (getDatabase().prepare(`
+        SELECT json_extract(ai_metadata, '$.category') AS category, COUNT(*) AS n
+        FROM models WHERE ai_metadata IS NOT NULL
+        GROUP BY category ORDER BY n DESC LIMIT 40
+    `).all() as Array<{ category: string | null }>)
+        .map((r) => r.category)
+        .filter((c): c is string => Boolean(c));
+}
+
+export function listTagNames(): string[] {
+    return (getDatabase().prepare('SELECT name FROM tags ORDER BY name').all() as Array<{ name: string }>).map((t) => t.name);
 }
 
 // ============ Duplicates ============

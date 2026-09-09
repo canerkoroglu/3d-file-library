@@ -28,6 +28,22 @@ export interface BoundingBox {
     z: number;
 }
 
+/** What the AI assistant produced for a model; stored as JSON and indexed for search. */
+export interface AiEnrichment {
+    /** Clean human-readable name, e.g. "Articulated dragon (body)". */
+    name: string;
+    /** One sentence describing the object and its use. */
+    summary: string;
+    /** One of AI_CATEGORIES. */
+    category: string;
+    /** Lowercase search words: synonyms, parts, purpose. */
+    keywords: string[];
+    /** Existing tag names the assistant thinks apply. */
+    suggestedTags: string[];
+    model: string;
+    generatedAt: string;
+}
+
 export interface Model {
     id: number;
     filename: string;
@@ -52,6 +68,7 @@ export interface Model {
     /** Set while the file cannot be found on disk (deleted, or its drive is disconnected). */
     missingSince?: string;
     sourceMetadata?: SourceMetadata;
+    aiMetadata?: AiEnrichment;
     tags?: Tag[];
 }
 
@@ -141,6 +158,64 @@ export interface ZipImportResult {
     skipped: number;
     error?: string;
 }
+
+// ============ AI assistant ============
+
+export interface AiSettings {
+    enabled: boolean;
+    /** OpenAI-compatible base URL including the version path, e.g. http://localhost:11434/v1 */
+    baseUrl: string;
+    /** Model name as the server knows it, e.g. qwen3:8b */
+    model: string;
+    /** The key itself never leaves the main process. */
+    hasApiKey: boolean;
+    /** Analyse newly imported models without being asked. */
+    autoEnrich: boolean;
+    timeoutMs: number;
+}
+
+/** Partial update; `apiKey: null` clears the key, a string replaces it, undefined keeps it. */
+export interface AiSettingsUpdate {
+    enabled?: boolean;
+    baseUrl?: string;
+    model?: string;
+    apiKey?: string | null;
+    autoEnrich?: boolean;
+    timeoutMs?: number;
+}
+
+export interface AiConnectionResult {
+    ok: boolean;
+    baseUrl: string;
+    latencyMs?: number;
+    /** Models the server reports, when it supports listing them. */
+    models: string[];
+    /** Whether the configured model is among them (undefined when the list is unavailable). */
+    modelAvailable?: boolean;
+    error?: string;
+}
+
+export interface AiProgress {
+    queued: number;
+    active: number;
+    completed: number;
+    failed: number;
+    total: number;
+    isRunning: boolean;
+    /** Filename currently being analysed. */
+    current?: string;
+    lastError?: string;
+}
+
+export interface QueryTranslation {
+    input: string;
+    /** Query in the app's search syntax. */
+    query: string;
+    explanation?: string;
+    model: string;
+}
+
+export type EnrichmentTarget = { ids: number[] } | { scope: 'all' | 'missing' };
 
 export type UpdateState = 'unsupported' | 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
 
@@ -265,7 +340,21 @@ export interface ElectronAPI {
     setAutoCheckUpdates: (enabled: boolean) => Promise<void>;
     openExternal: (url: string) => Promise<void>;
 
+    // AI assistant
+    getAiSettings: () => Promise<AiSettings>;
+    updateAiSettings: (update: AiSettingsUpdate) => Promise<AiSettings>;
+    /** Tests the saved settings, or the given unsaved values. */
+    testAiConnection: (update?: AiSettingsUpdate) => Promise<AiConnectionResult>;
+    translateSearch: (text: string) => Promise<QueryTranslation>;
+    /** Queues models for analysis; resolves with how many were queued. */
+    enrichModels: (target: EnrichmentTarget) => Promise<number>;
+    cancelEnrichment: () => Promise<void>;
+    getAiProgress: () => Promise<AiProgress>;
+    /** Adds the assistant's suggested tags to the model; resolves with how many were added. */
+    applySuggestedTags: (modelId: number) => Promise<number>;
+
     // Events (each returns an unsubscribe function)
+    onAiProgress: (callback: (progress: AiProgress) => void) => () => void;
     onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void;
     onAppNotice: (callback: (notice: AppNotice) => void) => () => void;
     onModelsUpdated: (callback: () => void) => () => void;

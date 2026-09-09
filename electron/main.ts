@@ -9,6 +9,10 @@ import { initializeWatchers, stopAllWatchers } from './fileWatcher';
 import { enqueueAll, reportProgress, startIndexer, stopIndexer } from './indexer';
 import { getThumbnailQueueSize, registerThumbnailIpc, requestThumbnailRender, setThumbnailQueueListener, setThumbnailWindow, stopThumbnailQueue } from './thumbnails';
 import { initUpdater } from './updater';
+import { getSetting, setSetting } from './settings';
+import { getAiConfig } from './ai/provider';
+import { enqueueEnrichment, startEnrichment } from './ai/enrichment';
+import { rebuildSearchIndex } from './library';
 import type { FileType, IndexProgress } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -124,6 +128,11 @@ function registerWatchFoldersFromEnv(): void {
 app.whenReady().then(async () => {
     setUserDataDir(app.getPath('userData'));
     initDatabase(getDatabasePath());
+    if (getSetting<boolean>('search.needsRebuild', false)) {
+        console.log('[DB] Rebuilding the search index after a schema change');
+        rebuildSearchIndex();
+        setSetting('search.needsRebuild', null);
+    }
     registerWatchFoldersFromEnv();
     registerMediaProtocol();
     registerThumbnailIpc();
@@ -132,16 +141,22 @@ app.whenReady().then(async () => {
 
     startIndexer({
         onProgress: (progress: IndexProgress) => sendToRenderer('index-progress', progress),
-        onModelIndexed: (modelId) => {
-            const row = getDatabase().prepare('SELECT filepath, file_type FROM models WHERE id = ?').get(modelId) as
-                | { filepath: string; file_type: FileType }
+        onModelIndexed: (modelId, result) => {
+            const row = getDatabase().prepare('SELECT filepath, file_type, ai_metadata FROM models WHERE id = ?').get(modelId) as
+                | { filepath: string; file_type: FileType; ai_metadata: string | null }
                 | undefined;
             if (row) requestThumbnailRender(modelId, row.filepath, row.file_type);
+            // Newly analysed (not merely re-checked) models get described by the assistant when that is switched on.
+            if (row && !result.unchanged && row.ai_metadata === null) {
+                const ai = getAiConfig();
+                if (ai.enabled && ai.autoEnrich) enqueueEnrichment({ ids: [modelId] });
+            }
             notifyModelsUpdated();
         },
         getThumbnailQueueSize,
     });
     setThumbnailQueueListener(reportProgress);
+    startEnrichment((progress) => sendToRenderer('ai:progress', progress));
 
     initUpdater((status) => sendToRenderer('updates:status', status));
 

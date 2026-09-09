@@ -175,6 +175,29 @@ const MIGRATIONS: Array<{ version: number; name: string; up: (db: Database.Datab
             db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
         },
     },
+    {
+        version: 5,
+        name: 'AI enrichment and search column',
+        up: (db) => {
+            const columns = new Set(
+                (db.prepare('PRAGMA table_info(models)').all() as Array<{ name: string }>).map((c) => c.name),
+            );
+            if (!columns.has('ai_metadata')) db.exec('ALTER TABLE models ADD COLUMN ai_metadata TEXT');
+            if (!columns.has('ai_enriched_at')) db.exec('ALTER TABLE models ADD COLUMN ai_enriched_at DATETIME');
+
+            // FTS5 tables cannot gain columns; recreate with the extra "ai" column and ask for a rebuild at startup.
+            db.exec(`
+                DROP TABLE IF EXISTS models_fts;
+                CREATE VIRTUAL TABLE models_fts USING fts5(
+                    filename, display_name, folder_path, tags, source, author, license, notes,
+                    title, designer, description, printer, readme, ai,
+                    tokenize = 'trigram'
+                );
+                INSERT INTO settings (key, value) VALUES ('search.needsRebuild', 'true')
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+            `);
+        },
+    },
 ];
 
 const DEFAULT_TAGS = [

@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { describeError } from '../lib/errors';
 import type {
+    AiProgress,
+    AiSettings,
+    AiSettingsUpdate,
     Collection,
     DuplicateGroup,
     FilterOptions,
@@ -8,6 +11,8 @@ import type {
     LibraryStats,
     ModelWithTags,
     Slicer,
+    EnrichmentTarget,
+    QueryTranslation,
     SortBy,
     SortOrder,
     Tag,
@@ -95,7 +100,23 @@ interface AppState {
     /** Version the user dismissed the update banner for. */
     dismissedUpdateVersion: string | null;
     toasts: Toast[];
+    aiSettings: AiSettings | null;
+    aiProgress: AiProgress | null;
+    /** Result of the last natural-language search, shown under the search box. */
+    lastTranslation: QueryTranslation | null;
+    isTranslating: boolean;
     theme: Theme;
+
+    // AI assistant
+    loadAiSettings: () => Promise<void>;
+    updateAiSettings: (update: AiSettingsUpdate) => Promise<void>;
+    setAiProgress: (progress: AiProgress | null) => void;
+    /** Turns a plain-language request into a search and applies it. */
+    askSearch: (text: string) => Promise<void>;
+    clearTranslation: () => void;
+    enrichModels: (target: EnrichmentTarget) => Promise<void>;
+    cancelEnrichment: () => Promise<void>;
+    applySuggestedTags: (modelId: number) => Promise<void>;
 
     // Notifications
     pushToast: (toast: ToastInput) => number;
@@ -203,7 +224,69 @@ export const useStore = create<AppState>((set, get) => ({
     updateStatus: null,
     dismissedUpdateVersion: null,
     toasts: [],
+    aiSettings: null,
+    aiProgress: null,
+    lastTranslation: null,
+    isTranslating: false,
     theme: readStoredTheme(),
+
+    loadAiSettings: async () => {
+        try {
+            set({ aiSettings: await window.electronAPI.getAiSettings() });
+        } catch (error) {
+            get().reportError('Could not load the AI settings', error);
+        }
+    },
+    updateAiSettings: async (update) => {
+        try {
+            set({ aiSettings: await window.electronAPI.updateAiSettings(update) });
+        } catch (error) {
+            get().reportError('Could not save the AI settings', error);
+        }
+    },
+    setAiProgress: (progress) => set({ aiProgress: progress }),
+    askSearch: async (text) => {
+        const input = text.trim();
+        if (!input) return;
+        set({ isTranslating: true });
+        try {
+            const translation = await window.electronAPI.translateSearch(input);
+            set({ lastTranslation: translation, isTranslating: false });
+            get().setSearchQuery(translation.query);
+        } catch (error) {
+            set({ isTranslating: false });
+            get().reportError('The assistant could not interpret that', error);
+        }
+    },
+    clearTranslation: () => set({ lastTranslation: null }),
+    enrichModels: async (target) => {
+        try {
+            const queued = await window.electronAPI.enrichModels(target);
+            get().pushToast({
+                kind: 'info',
+                title: queued > 0 ? `Analysing ${queued} model${queued === 1 ? '' : 's'} with AI` : 'Nothing new to analyse',
+                message: queued > 0 ? 'Progress shows in the sidebar; results appear as they come in.' : undefined,
+            });
+        } catch (error) {
+            get().reportError('Could not start the AI analysis', error);
+        }
+    },
+    cancelEnrichment: async () => {
+        try {
+            await window.electronAPI.cancelEnrichment();
+        } catch (error) {
+            get().reportError('Could not stop the AI analysis', error);
+        }
+    },
+    applySuggestedTags: async (modelId) => {
+        try {
+            const added = await window.electronAPI.applySuggestedTags(modelId);
+            get().pushToast({ kind: added > 0 ? 'success' : 'info', title: added > 0 ? `Added ${added} tag${added === 1 ? '' : 's'}` : 'Those tags are already applied' });
+            await get().loadModels();
+        } catch (error) {
+            get().reportError('Could not apply the suggested tags', error);
+        }
+    },
 
     pushToast: (toast) => {
         const id = nextToastId++;

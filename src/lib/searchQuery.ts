@@ -13,6 +13,9 @@
  *   has:readme            only models with a README beside them
  *   is:missing            files that cannot be found on disk (deleted or drive disconnected)
  *   is:available          the opposite: files that are present
+ *   category:kitchen      category assigned by the AI assistant (substring match)
+ *   added:>7d added:<2026-01-01   when the model was added: after/before a date or a relative age (d, w, m, y)
+ *   modified:>2w          same for the file's modification time
  *
  * Everything else is treated as free text.
  */
@@ -34,9 +37,39 @@ export interface ParsedQuery {
     hasReadme?: boolean;
     /** true = only missing files, false = only available files. */
     missing?: boolean;
+    category?: string;
+    /** ISO timestamps derived from added:/modified: bounds. */
+    addedAfter?: string;
+    addedBefore?: string;
+    modifiedAfter?: string;
+    modifiedBefore?: string;
 }
 
-const OPERATORS = new Set(['tag', 'type', 'source', 'author', 'license', 'tris', 'size', 'has', 'is']);
+const OPERATORS = new Set(['tag', 'type', 'source', 'author', 'license', 'tris', 'size', 'has', 'is', 'category', 'added', 'modified']);
+
+/**
+ * Parses a date bound: an ISO date (2026-08-01) or a relative age (7d, 2w, 3m, 1y) counted back from `now`.
+ * Returns an ISO timestamp, or undefined when unreadable.
+ */
+export function parseDateBound(raw: string, now: Date): string | undefined {
+    const value = raw.trim().toLowerCase();
+    const relative = value.match(/^(\d+(?:\.\d+)?)\s*(d|w|m|y|day|days|week|weeks|month|months|year|years)$/);
+    if (relative) {
+        const amount = parseFloat(relative[1]);
+        const unit = relative[2][0];
+        const date = new Date(now.getTime());
+        if (unit === 'd') date.setUTCDate(date.getUTCDate() - amount);
+        else if (unit === 'w') date.setUTCDate(date.getUTCDate() - amount * 7);
+        else if (unit === 'm') date.setUTCMonth(date.getUTCMonth() - amount);
+        else date.setUTCFullYear(date.getUTCFullYear() - amount);
+        return date.toISOString();
+    }
+    if (/^\d{4}-\d{2}(-\d{2})?$/.test(value)) {
+        const date = new Date(value.length === 7 ? `${value}-01T00:00:00Z` : `${value}T00:00:00Z`);
+        return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+    }
+    return undefined;
+}
 
 interface Token {
     key?: string;
@@ -119,9 +152,20 @@ function parseBound(raw: string): { op: '>' | '<' | '='; value: number } | undef
     return { op, value };
 }
 
-export function parseSearchQuery(raw: string): ParsedQuery {
+export function parseSearchQuery(raw: string, options: { now?: Date } = {}): ParsedQuery {
     const result: ParsedQuery = { text: '', terms: [], tags: [], fileTypes: [] };
     if (!raw || !raw.trim()) return result;
+    const now = options.now ?? new Date();
+
+    // "added:>7d" means newer than a week (created after the cutoff); "added:<7d" means older.
+    const dateBound = (value: string): { after?: string; before?: string } | null => {
+        const match = value.trim().match(/^(>=|<=|>|<)?\s*(.+)$/);
+        if (!match) return null;
+        const iso = parseDateBound(match[2], now);
+        if (!iso) return null;
+        const op = match[1] ?? '>';
+        return op.startsWith('<') ? { before: iso } : { after: iso };
+    };
 
     const terms: string[] = [];
 
@@ -179,6 +223,21 @@ export function parseSearchQuery(raw: string): ParsedQuery {
                 const what = value.toLowerCase();
                 if (what === 'missing' || what === 'offline') result.missing = true;
                 if (what === 'available' || what === 'online' || what === 'present') result.missing = false;
+                break;
+            }
+            case 'category':
+                result.category = value;
+                break;
+            case 'added': {
+                const bound = dateBound(value);
+                if (bound?.after) result.addedAfter = bound.after;
+                if (bound?.before) result.addedBefore = bound.before;
+                break;
+            }
+            case 'modified': {
+                const bound = dateBound(value);
+                if (bound?.after) result.modifiedAfter = bound.after;
+                if (bound?.before) result.modifiedBefore = bound.before;
                 break;
             }
             default:

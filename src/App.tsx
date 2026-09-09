@@ -14,7 +14,7 @@ import ToastHost from './components/ToastHost';
 import { describeError } from './lib/errors';
 
 function App() {
-    const { loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, setUpdateStatus, pushToast, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip, selectAllModels, clearSelection } = useStore();
+    const { loadModels, loadTags, loadCollections, loadSlicers, loadAiSettings, setIndexProgress, setUpdateStatus, setAiProgress, pushToast, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip, selectAllModels, clearSelection } = useStore();
 
     // Unexpected renderer failures become a toast instead of vanishing into the console.
     useEffect(() => {
@@ -102,6 +102,8 @@ function App() {
                 await loadModels();
                 setIndexProgress(await api.getIndexProgress());
                 void loadSlicers();
+                void loadAiSettings();
+                setAiProgress(await api.getAiProgress());
                 setUpdateStatus(await api.getUpdateStatus());
             } catch (error) {
                 console.error('Failed to initialize app data:', error);
@@ -118,6 +120,7 @@ function App() {
         const unsubscribeProgress = api.onIndexProgress((progress) => setIndexProgress(progress));
         const unsubscribeUpdates = api.onUpdateStatus((status) => setUpdateStatus(status));
         const unsubscribeNotices = api.onAppNotice((notice) => pushToast(notice));
+        const unsubscribeAi = api.onAiProgress((progress) => setAiProgress(progress));
 
         return () => {
             unsubscribeModels();
@@ -125,8 +128,9 @@ function App() {
             unsubscribeProgress();
             unsubscribeUpdates();
             unsubscribeNotices();
+            unsubscribeAi();
         };
-    }, [loadModels, loadTags, loadCollections, loadSlicers, setIndexProgress, setUpdateStatus, pushToast]);
+    }, [loadModels, loadTags, loadCollections, loadSlicers, loadAiSettings, setIndexProgress, setUpdateStatus, setAiProgress, pushToast]);
 
     return (
         <div className="h-screen w-screen flex flex-col bg-primary-bg overflow-hidden text-text-primary transition-colors duration-200">

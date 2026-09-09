@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw, FileX, ExternalLink, Plus, Trash2, Download, Loader2 } from 'lucide-react';
 import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
+import AiSettingsSection from './AiSettingsSection';
 
 export default function SettingsModal() {
     const { closeSettings, theme, setTheme, indexProgress, libraryStats, loadModels, slicers, loadSlicers, setDefaultSlicer, addCustomSlicer, removeCustomSlicer, updateStatus, checkForUpdates, downloadUpdate, installUpdate, reportError, pushToast } = useStore();
@@ -146,6 +147,8 @@ export default function SettingsModal() {
                             </button>
                         </div>
                     </section>
+
+                    <AiSettingsSection />
 
                     <section className="space-y-4">
                         <h3 className="text-sm font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">

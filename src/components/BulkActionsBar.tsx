@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Trash2, Tag, X, ChevronUp, FolderPlus, CheckSquare, TagIcon } from 'lucide-react';
+import { Trash2, Tag, X, ChevronUp, FolderPlus, CheckSquare, TagIcon, Sparkles } from 'lucide-react';
 import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -10,7 +10,7 @@ export default function BulkActionsBar() {
         selectedModels, selectionMode, models, totalModels,
         clearSelection, selectAllModels,
         bulkDelete, bulkAddTag, bulkRemoveTag, bulkAddToCollection,
-        tags, collections,
+        tags, collections, aiSettings, enrichModels,
     } = useStore();
     const [openMenu, setOpenMenu] = useState<MenuKind | null>(null);
     const [confirmRemove, setConfirmRemove] = useState(false);
@@ -125,6 +125,18 @@ export default function BulkActionsBar() {
                         'Create a collection in the sidebar first',
                     )}
                 </div>
+
+                {aiSettings?.enabled && (
+                    <button
+                        onClick={() => void enrichModels({ ids: Array.from(selectedModels) })}
+                        disabled={selectedCount === 0}
+                        className="btn btn-secondary h-9 text-sm px-3 disabled:opacity-40"
+                        title="Describe, categorise and suggest tags for the selected models"
+                    >
+                        <Sparkles size={16} />
+                        <span>Analyse with AI</span>
+                    </button>
+                )}
 
                 <button
                     onClick={() => setConfirmRemove(true)}

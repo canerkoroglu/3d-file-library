@@ -14,6 +14,7 @@ A desktop library for 3D printing files (STL, 3MF, OBJ). Point it at the folders
 - **Duplicate finder**: exact duplicates are detected from stored content hashes without rescanning your disk.
 - **3D viewer**: orbit, zoom and pan with Z-up orientation matching your slicer. Toolbar with auto-rotate (Space), wireframe (W), grid (G), reset view (R), a section-height slider that cuts the model open, a model colour picker, and file colours for 3MF projects.
 - **Bulk actions**: hover a card for its checkbox, ⌘/Ctrl-click to toggle, Shift-click for ranges, ⌘/Ctrl+A for everything loaded, then add or remove tags, add to a collection or remove from the library in one go.
+- **AI assistant (optional, local)**: point the app at any OpenAI-compatible server (Ollama or LM Studio on your machine, or a remote host) and pick a model such as Qwen3. The assistant writes a one-line description, a category, search keywords and tag suggestions for each model, all of which become searchable, and turns plain-language questions ("small printed dragons from last month") into the search syntax. Nothing is sent anywhere but the server you configure.
 - **Slicer integration**: installed slicers (Bambu Studio, OrcaSlicer, PrusaSlicer, SuperSlicer, Cura, ideaMaker, Lychee, CHITUBOX and more) are detected on macOS, Windows and Linux. Pick a default in Settings or choose per model from the viewer; anything the scan misses can be added by hand.
 - **Cross-platform**: macOS, Windows and Linux builds.
 
@@ -34,8 +35,19 @@ Type plain words to search everything. Add operators to narrow down:
 | `size:<50` `size:>200` | largest dimension in millimetres |
 | `has:readme` `has:thumbnail` | only models with a README beside them / with a preview |
 | `is:missing` `is:available` | files that cannot be found on disk / files that are present |
+| `category:kitchen` | category assigned by the AI assistant |
+| `added:>7d` `added:<2026-01-01` `modified:>2w` | when the model was added or the file changed; relative ages use d, w, m, y |
 
 Results are ranked by relevance when there is free text; pick another sort order from the dropdown.
+
+## AI assistant
+
+Settings → AI assistant. Choose a server preset or enter a base URL ending in `/v1` (for example `https://llm.example.com/v1`), an optional API key, and a model name; *Test connection* lists the models the server offers and picks one if the configured name is missing. Then:
+
+- **Ask**: the sparkle button in the search box takes a plain-language request and applies the translated query, showing what it understood so you can adjust it.
+- **Analyse**: from the viewer, the bulk action bar, or *Settings → Analyse models without a description*. Turn on *Analyse new models automatically* to process imports as they arrive. Results appear in the viewer's AI section; `category:` searches use them.
+
+Ollama is detected automatically and driven through its native API with model "thinking" switched off, because reasoning models otherwise spend their whole answer on it. Other servers get the OpenAI-compatible API with `enable_thinking: false`; if a server cannot switch thinking off, use a non-reasoning model. The API key is stored encrypted with the operating system's keychain facilities where available.
 
 ## Tech stack
 
@@ -89,6 +101,9 @@ electron/
   fileWatcher.ts       chokidar watchers + folder reconciliation
   thumbnails.ts        render queue; the renderer draws 3D previews on request
   updater.ts           electron-updater wiring (GitHub releases)
+  ai/provider.ts       OpenAI-compatible / Ollama client, settings, key storage
+  ai/prompts.ts        prompt construction and reply validation
+  ai/enrichment.ts     background queue that describes models
   slicers.ts           slicer discovery per platform and launching
   zipImport.ts         safe extraction of downloaded archives into a watched folder
   settings.ts          key/value preferences stored in the database

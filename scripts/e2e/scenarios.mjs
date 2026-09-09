@@ -199,6 +199,70 @@ export const scenarios = [
         },
     },
     {
+        name: 'AI assistant: setup, plain-language search and enrichment',
+        async run({ app, fakeLlm }) {
+            const setInput = (selector, value) => app.evaluate(`(() => {
+                const input = document.querySelector(${JSON.stringify(selector)});
+                const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                setter.call(input, ${JSON.stringify(value)});
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                return true;
+            })()`);
+
+            // Configure the assistant against the fake server through the settings dialog.
+            await app.evaluate(`(() => { [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Settings')).click(); return true; })()`);
+            await app.waitFor(`!!document.querySelector('[data-testid="ai-settings"]')`, { label: 'the AI settings' });
+            await setInput('[data-testid="ai-base-url"]', fakeLlm.baseUrl);
+            await setInput('[data-testid="ai-model"]', 'wrong-model');
+            await app.evaluate(`(() => { document.querySelector('[data-testid="ai-test"]').click(); return true; })()`);
+            const testResult = await app.waitFor(`document.querySelector('[data-testid="ai-test-result"]')?.textContent ?? ''`, { timeout: 10_000, label: 'the connection test result' });
+            assert.match(testResult, /Connected in \d+ ms/);
+            assert.match(testResult, /picked "fake-qwen"/, 'an unavailable model is swapped for one the server has');
+            await app.evaluate(`(() => { document.querySelector('[data-testid="ai-save"]').click(); return true; })()`);
+            await app.waitFor(`document.querySelector('[data-testid="ai-save"]').disabled`, { label: 'the settings to be saved' });
+            await app.evaluate(`(() => { const box = document.querySelector('[data-testid="ai-enabled"]'); if (!box.checked) box.click(); return true; })()`);
+            await app.waitFor(`window.electronAPI.getAiSettings().then((s) => s.enabled && s.model === 'fake-qwen')`, { label: 'the assistant to be enabled' });
+            await app.evaluate(clickButton('Close'));
+
+            // Plain-language search goes through the translator and lands in the search box.
+            await app.evaluate(`(() => { document.querySelector('[data-testid="ask-toggle"]').click(); return true; })()`);
+            await app.waitFor(`!!document.querySelector('[data-testid="ask-input"]')`, { label: 'the ask box' });
+            await setInput('[data-testid="ask-input"]', 'small printed dragons');
+            await sleep(200);
+            await app.evaluate(`(() => { document.querySelector('[data-testid="ask-submit"]').click(); return true; })()`);
+            const chip = await app.waitFor(`document.querySelector('[data-testid="translation-chip"]')?.textContent ?? ''`, { timeout: 15_000, label: 'the translation chip' });
+            assert.match(chip, /dragon tag:Printed size:<50/);
+            assert.equal(await app.evaluate(`document.querySelector('input[placeholder^="Search"]').value`), 'dragon tag:Printed size:<50');
+            await app.evaluate(setSearch(''));
+            await app.waitFor(`${modelCounter} > 100`, { label: 'the full library again' });
+
+            // Enrich one model from the viewer and apply the suggested tag.
+            const [dragon] = (await app.evaluate(`window.electronAPI.getModels({ searchQuery: 'dragon_body', limit: 1 })`)).items;
+            await app.evaluate(`window.electronAPI.enrichModels({ ids: [${dragon.id}] })`);
+            await app.waitFor(`window.electronAPI.getModels({ searchQuery: 'dragon_body', limit: 1 }).then((p) => !!p.items[0]?.aiMetadata)`, { timeout: 30_000, label: 'the model to be enriched' });
+            const [enriched] = (await app.evaluate(`window.electronAPI.getModels({ searchQuery: 'dragon_body', limit: 1 })`)).items;
+            assert.equal(enriched.aiMetadata.category, 'figurine');
+            assert.deepEqual(enriched.aiMetadata.suggestedTags, ['Printed'], 'unknown tag names are dropped');
+            assert.ok(enriched.aiMetadata.keywords.includes('dragon'));
+            assert.equal(enriched.aiMetadata.model, 'fake-qwen');
+            assert.equal((await app.evaluate(`window.electronAPI.getModels({ searchQuery: 'category:figurine', limit: 1 })`)).total, 1);
+            assert.ok((await app.evaluate(`window.electronAPI.getModels({ searchQuery: 'fake', limit: 1 })`)).total >= 1, 'AI keywords are searchable');
+
+            await app.evaluate(setSearch('dragon_body'));
+            await app.waitFor(`${modelCounter} === 1`, { label: 'the dragon body card' });
+            await app.evaluate(clickCard(0));
+            await app.waitFor(`!!document.querySelector('[data-testid="ai-apply-tags"]')`, { label: 'the apply-tags button' });
+            await app.evaluate(`(() => { document.querySelector('[data-testid="ai-apply-tags"]').click(); return true; })()`);
+            await app.waitFor(`window.electronAPI.getModels({ searchQuery: 'dragon_body tag:printed', limit: 1 }).then((p) => p.total === 1)`, { label: 'the suggested tag to be applied' });
+            await app.evaluate(`(() => { document.querySelector('button[title="Close (Esc)"]').click(); return true; })()`);
+            await app.evaluate(setSearch(''));
+
+            // Switch the assistant back off so later scenarios are unaffected.
+            await app.evaluate(`window.electronAPI.updateAiSettings({ enabled: false })`);
+            assert.ok(fakeLlm.requests.some((r) => r.url === '/v1/chat/completions'), 'the app talked to the server');
+        },
+    },
+    {
         name: 'settings show slicers, missing-file tools and version',
         async run({ app }) {
             await app.evaluate(`(() => { [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Settings')).click(); return true; })()`);

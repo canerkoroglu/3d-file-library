@@ -3,9 +3,12 @@ import fs from 'fs';
 import path from 'path';
 import { getDatabase } from './database';
 import {
+    applySuggestedTags,
     deleteModel,
     fileTypeOf,
     findDuplicates,
+    listAiCategories,
+    listTagNames,
     forgetMissingModels,
     getLibraryStats,
     getModel,
@@ -25,7 +28,10 @@ import { cancelThumbnailRender, requestThumbnailRender, saveThumbnailFromBase64 
 import { addCustomSlicer, listSlicers, openInSlicer, removeCustomSlicer, setDefaultSlicer } from './slicers';
 import { importZipFiles } from './zipImport';
 import { APP_VERSION, checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, isAutoCheckEnabled, setAutoCheckEnabled } from './updater';
-import type { Collection, FilterOptions, Model, SourceMetadata, Tag, ZipImportRequest } from '../src/types';
+import { chatJson, getAiConfig, getAiSettings, testConnection, updateAiSettings } from './ai/provider';
+import { buildTranslationMessages, parseTranslation } from './ai/prompts';
+import { cancelEnrichment, enqueueEnrichment, getEnrichmentProgress } from './ai/enrichment';
+import type { AiSettingsUpdate, Collection, EnrichmentTarget, FilterOptions, Model, QueryTranslation, SourceMetadata, Tag, ZipImportRequest } from '../src/types';
 
 type Handler<T> = (event: IpcMainInvokeEvent, ...args: any[]) => Promise<T> | T;
 
@@ -290,6 +296,36 @@ export function setupIpcHandlers(): void {
     handle('open-external', async (_event, url: string) => {
         if (!/^https:\/\//i.test(url)) throw new Error('Only https links can be opened');
         await shell.openExternal(url);
+    });
+
+    // ============ AI assistant ============
+
+    handle('ai:get-settings', () => getAiSettings());
+    handle('ai:update-settings', (_event, update: AiSettingsUpdate) => updateAiSettings(update ?? {}));
+    handle('ai:test-connection', (_event, update?: AiSettingsUpdate) => testConnection(update));
+    handle('ai:get-progress', () => getEnrichmentProgress());
+    handle('ai:cancel', () => cancelEnrichment());
+    handle('ai:apply-suggested-tags', (_event, modelId: number) => {
+        const added = applySuggestedTags(modelId);
+        if (added > 0) notifyModelsUpdated();
+        return added;
+    });
+
+    handle('ai:enrich', (_event, target: EnrichmentTarget) => {
+        if (!getAiConfig().enabled) throw new Error('The AI assistant is turned off in Settings.');
+        return enqueueEnrichment(target);
+    });
+
+    handle('ai:translate-search', async (_event, text: string): Promise<QueryTranslation> => {
+        const input = (text ?? '').trim();
+        if (!input) throw new Error('Type what you are looking for first.');
+        const messages = buildTranslationMessages(input, {
+            tags: listTagNames(),
+            categories: listAiCategories(),
+            today: new Date().toISOString().slice(0, 10),
+        });
+        const raw = await chatJson(messages, { maxTokens: 400, temperature: 0.1 });
+        return parseTranslation(raw, input, getAiConfig().model);
     });
 
     // ============ Updates ============

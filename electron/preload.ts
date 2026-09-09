@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
-import type { AppNotice, ElectronAPI, IndexProgress, ThumbnailRenderRequest, UpdateStatus } from '../src/types';
+import type { AiProgress, AppNotice, ElectronAPI, IndexProgress, ThumbnailRenderRequest, UpdateStatus } from '../src/types';
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
     const listener = (_event: IpcRendererEvent, payload: T) => callback(payload);
@@ -73,7 +73,18 @@ const electronAPI: ElectronAPI = {
     setAutoCheckUpdates: (enabled) => ipcRenderer.invoke('updates:set-auto-check', enabled),
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
+    // AI assistant
+    getAiSettings: () => ipcRenderer.invoke('ai:get-settings'),
+    updateAiSettings: (update) => ipcRenderer.invoke('ai:update-settings', update),
+    testAiConnection: (update) => ipcRenderer.invoke('ai:test-connection', update),
+    translateSearch: (text) => ipcRenderer.invoke('ai:translate-search', text),
+    enrichModels: (target) => ipcRenderer.invoke('ai:enrich', target),
+    cancelEnrichment: () => ipcRenderer.invoke('ai:cancel'),
+    getAiProgress: () => ipcRenderer.invoke('ai:get-progress'),
+    applySuggestedTags: (modelId) => ipcRenderer.invoke('ai:apply-suggested-tags', modelId),
+
     // Events
+    onAiProgress: (callback) => subscribe<AiProgress>('ai:progress', callback),
     onUpdateStatus: (callback) => subscribe<UpdateStatus>('updates:status', callback),
     onAppNotice: (callback) => subscribe<AppNotice>('app:notice', callback),
     onModelsUpdated: (callback) => subscribe<void>('models-updated', () => callback()),

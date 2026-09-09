@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Folder, FolderOpen, FolderX, Plus, Settings, Inbox, Copy, X, RefreshCw, Edit2, Loader2, FileX, FileArchive } from 'lucide-react';
+import { Folder, FolderOpen, FolderX, Plus, Settings, Inbox, Copy, X, RefreshCw, Edit2, Loader2, FileX, FileArchive, Sparkles } from 'lucide-react';
 import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
 export default function Sidebar() {
-    const { collections, selectedCollection, setSelectedCollection, openDuplicatesModal, openSettings, openImportZip, indexProgress, libraryStats, setSearchQuery, searchQuery, reportError, pushToast } = useStore();
+    const { collections, selectedCollection, setSelectedCollection, openDuplicatesModal, openSettings, openImportZip, indexProgress, aiProgress, cancelEnrichment, libraryStats, setSearchQuery, searchQuery, reportError, pushToast } = useStore();
     const missingCount = libraryStats?.missing ?? 0;
     const isShowingMissing = searchQuery.trim().toLowerCase() === 'is:missing';
 
@@ -362,6 +362,30 @@ export default function Sidebar() {
                     {indexProgress.total > 0 && indexProgress.thumbnailsQueued > 0 && (
                         <div className="text-[10px] text-text-secondary mt-1">{indexProgress.thumbnailsQueued} previews to render</div>
                     )}
+                </div>
+            )}
+
+            {/* AI analysis status */}
+            {aiProgress?.isRunning && (
+                <div className="px-4 py-2 border-t border-accent-gray flex-shrink-0" data-testid="ai-progress">
+                    <div className="flex items-center justify-between text-[11px] text-text-secondary mb-1">
+                        <span className="flex items-center gap-1.5">
+                            <Sparkles size={11} className="text-accent-blue" /> AI analysis
+                        </span>
+                        <span className="flex items-center gap-2 tabular-nums">
+                            {aiProgress.completed + aiProgress.failed} / {aiProgress.total}
+                            <button onClick={() => void cancelEnrichment()} className="hover:text-text-primary" title="Stop">
+                                <X size={11} />
+                            </button>
+                        </span>
+                    </div>
+                    <div className="h-1 bg-primary-bg rounded overflow-hidden">
+                        <div
+                            className="h-full bg-accent-blue transition-all duration-300"
+                            style={{ width: `${aiProgress.total ? ((aiProgress.completed + aiProgress.failed) / aiProgress.total) * 100 : 0}%` }}
+                        />
+                    </div>
+                    {aiProgress.current && <div className="text-[10px] text-text-secondary mt-1 truncate" title={aiProgress.current}>{aiProgress.current}</div>}
                 </div>
             )}
 
