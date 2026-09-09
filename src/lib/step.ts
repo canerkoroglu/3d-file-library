@@ -10,8 +10,26 @@ import occtWasmUrl from 'occt-import-js/dist/occt-import-js.wasm?url';
 
 let modulePromise: Promise<OcctModule> | null = null;
 
+/**
+ * Fetches the WASM bytes via XHR. In the packaged app the renderer runs on file://, where
+ * Chromium blocks fetch() (which Emscripten would use by default) but XHR still works; we
+ * then hand the bytes to the module as `wasmBinary` so it never has to fetch them itself.
+ */
+function loadWasmBinary(url: string): Promise<ArrayBuffer> {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.responseType = 'arraybuffer';
+        xhr.onload = () => (xhr.status === 0 || xhr.status === 200 ? resolve(xhr.response as ArrayBuffer) : reject(new Error(`Could not load the STEP engine (${xhr.status}).`)));
+        xhr.onerror = () => reject(new Error('Could not load the STEP engine.'));
+        xhr.send();
+    });
+}
+
 function getOcct(): Promise<OcctModule> {
-    if (!modulePromise) modulePromise = occtimportjs({ locateFile: () => occtWasmUrl });
+    if (!modulePromise) {
+        modulePromise = loadWasmBinary(occtWasmUrl).then((wasmBinary) => occtimportjs({ wasmBinary, locateFile: () => occtWasmUrl }));
+    }
     return modulePromise;
 }
 

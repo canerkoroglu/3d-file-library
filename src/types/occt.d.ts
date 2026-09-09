@@ -15,6 +15,8 @@ declare module 'occt-import-js' {
     }
     export interface OcctFactoryOptions {
         locateFile?: (path: string, scriptDirectory: string) => string;
+        /** Pre-fetched WASM bytes, so the module does not fetch them itself (needed under file://). */
+        wasmBinary?: ArrayBuffer;
     }
     const factory: (options?: OcctFactoryOptions) => Promise<OcctModule>;
     export default factory;
