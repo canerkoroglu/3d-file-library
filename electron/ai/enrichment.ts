@@ -96,7 +96,9 @@ async function enrichOne(modelId: number): Promise<void> {
     const source = getEnrichmentSource(modelId);
     if (!source) return; // model removed meanwhile
     const config = getAiConfig();
-    const raw = await chatJson(buildEnrichmentMessages(source), { maxTokens: 900, temperature: 0.2 });
+    // Headroom for reasoning models: some (e.g. Gemma on LM Studio) spend 500-800 tokens
+    // thinking before the JSON, which would truncate a tighter budget mid-object.
+    const raw = await chatJson(buildEnrichmentMessages(source), { maxTokens: 1400, temperature: 0.2 });
     const enrichment = parseEnrichment(raw, source.existingTags, config.model);
     setAiMetadata(modelId, enrichment);
 }

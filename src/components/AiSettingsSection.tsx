@@ -103,7 +103,10 @@ export default function AiSettingsSection() {
                             value={preset}
                             onChange={(e) => {
                                 const chosen = AI_PRESETS.find((p) => p.id === e.target.value);
-                                if (chosen) setBaseUrl(chosen.baseUrl);
+                                if (chosen) {
+                                    setBaseUrl(chosen.baseUrl);
+                                    if ('model' in chosen && chosen.model) setModel(chosen.model);
+                                }
                                 setDirty(true);
                             }}
                             className="input w-full"
