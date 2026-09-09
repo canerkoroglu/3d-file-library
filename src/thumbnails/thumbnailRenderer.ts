@@ -8,6 +8,7 @@ import { GLTFLoader, OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
 import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import type { FileType, ThumbnailRenderRequest } from '../types';
 import { loadThreeMfObject } from '../lib/threeMf';
+import { loadStepObject } from '../lib/step';
 
 const SIZE = 512;
 const BACKGROUND = 0x232323;
@@ -49,6 +50,9 @@ async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THRE
     }
     if (fileType === 'usdz') {
         return new USDZLoader().parse(new Uint8Array(buffer));
+    }
+    if (fileType === 'step') {
+        return await loadStepObject(buffer);
     }
     const blob = new Blob([buffer], { type: 'model/3mf' });
     const url = URL.createObjectURL(blob);

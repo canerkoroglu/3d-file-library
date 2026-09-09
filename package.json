@@ -38,9 +38,10 @@
     "fast-xml-parser": "^5.3.4",
     "jszip": "^3.10.1",
     "lucide-react": "^0.563.0",
+    "occt-import-js": "^0.0.23",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.4",
     "three": "^0.182.0",
     "three-stdlib": "^2.36.1",
     "vite": "^7.3.1",
@@ -54,7 +55,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.172.0",
     "autoprefixer": "^10.4.24",
-    "electron": "^40.1.0",
+    "electron": "^44.3.0",
     "electron-builder": "^26.7.0",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
@@ -65,7 +66,7 @@
     "typescript-eslint": "^8.44.0",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6",
-    "vitest": "^3.2.4"
+    "vitest": "^5.0.0"
   },
   "build": {
     "appId": "com.modelist.stlviewer",

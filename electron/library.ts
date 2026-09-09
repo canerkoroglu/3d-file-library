@@ -21,7 +21,7 @@ import type {
 } from '../src/types';
 import type { AnalysisResult } from './analyzers/types';
 
-export const SUPPORTED_EXTENSIONS = ['.stl', '.3mf', '.obj', '.glb', '.gltf', '.usdz'];
+export const SUPPORTED_EXTENSIONS = ['.stl', '.3mf', '.obj', '.glb', '.gltf', '.usdz', '.step', '.stp'];
 
 /** Higher wins: a weaker thumbnail never replaces a stronger one. */
 export const THUMBNAIL_STRENGTH: Record<ThumbnailSource, number> = {
@@ -51,6 +51,7 @@ export function fileTypeOf(filepath: string): FileType | null {
     if (ext === '.obj') return 'obj';
     if (ext === '.glb' || ext === '.gltf') return 'glb';
     if (ext === '.usdz') return 'usdz';
+    if (ext === '.step' || ext === '.stp') return 'step';
     return null;
 }
 

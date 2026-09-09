@@ -4,6 +4,7 @@ import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import * as THREE from 'three';
 import type { FileType } from '../types';
 import { loadThreeMfObject } from '../lib/threeMf';
+import { loadStepObject } from '../lib/step';
 
 export interface ViewerDisplayOptions {
     wireframe: boolean;
@@ -56,6 +57,9 @@ async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THRE
     }
     if (fileType === 'usdz') {
         return new USDZLoader().parse(new Uint8Array(buffer));
+    }
+    if (fileType === 'step') {
+        return await loadStepObject(buffer);
     }
     const blob = new Blob([buffer], { type: 'model/3mf' });
     const url = URL.createObjectURL(blob);
@@ -151,7 +155,7 @@ export default function GenericModel({ filepath, fileType, options, onError }: G
 
         for (const [mesh, original] of prepared.originalMaterials) {
             // glTF/USDZ carry their own materials and textures — always show them; 3MF is toggleable.
-            const useFile = fileType === '3mf' ? options.fileColors : fileType === 'glb' || fileType === 'usdz';
+            const useFile = fileType === '3mf' ? options.fileColors : fileType === 'glb' || fileType === 'usdz' || fileType === 'step';
             mesh.material = useFile ? original : uniformMaterial;
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             for (const material of materials) {

@@ -23,7 +23,7 @@ export interface AnalysisJob {
     id: number;
     modelId: number;
     filepath: string;
-    fileType: 'stl' | '3mf' | 'obj' | 'glb' | 'usdz';
+    fileType: 'stl' | '3mf' | 'obj' | 'glb' | 'usdz' | 'step';
     thumbnailDir: string;
     /** Stored values, used to skip unchanged files. */
     knownMtimeMs: number | null;
