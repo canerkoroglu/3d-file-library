@@ -4,7 +4,8 @@ import os from 'os';
 import path from 'path';
 import { analyzeStl, isBinaryStl } from '../electron/analyzers/stl';
 import { analyzeObj } from '../electron/analyzers/obj';
-import { analyzeModelXml, parseSlicerConfigs } from '../electron/analyzers/threemf';
+import { analyzeModelXml, analyzeThreeMf, parseSlicerConfigs } from '../electron/analyzers/threemf';
+import JSZip from 'jszip';
 import { detectLicense, detectSource, findSidecars } from '../electron/analyzers/sidecars';
 import { GeometryAccumulator } from '../electron/analyzers/geometry';
 
@@ -134,6 +135,95 @@ describe('3MF analyzer', () => {
             'Metadata/Slic3r_PE.config': '; layer_height = 0.15\n; printer_model = MK4\n; filament_type = PLA;PLA\n',
         });
         expect(prusa).toEqual({ slicer: 'PrusaSlicer', printerModel: 'MK4', filamentTypes: ['PLA'], layerHeight: 0.15 });
+    });
+
+    // A tetrahedron: 4 triangles, bbox 2×3×4, tetra volume 2*3*4/6 = 4 (matches the single-XML test above).
+    const NS = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"';
+    const tetraObject = (id: string) => `<?xml version="1.0"?>
+<model unit="millimeter" ${NS}>
+  <resources>
+    <object id="${id}" type="model">
+      <mesh>
+        <vertices><vertex x="0" y="0" z="0"/><vertex x="2" y="0" z="0"/><vertex x="0" y="3" z="0"/><vertex x="0" y="0" z="4"/></vertices>
+        <triangles><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="1" v3="3"/><triangle v1="0" v2="3" v3="2"/><triangle v1="1" v2="2" v3="3"/></triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build/>
+</model>`;
+    const triObject = (id: string) => `<?xml version="1.0"?>
+<model unit="millimeter" ${NS}>
+  <resources>
+    <object id="${id}" type="model">
+      <mesh>
+        <vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/></vertices>
+        <triangles><triangle v1="0" v2="1" v3="2"/></triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build/>
+</model>`;
+    const rels = `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>`;
+
+    async function analyzeZip(files: Record<string, string>) {
+        const zip = new JSZip();
+        for (const [name, content] of Object.entries(files)) zip.file(name, content);
+        const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modelist-3mf-'));
+        const filepath = path.join(dir, 'model.3mf');
+        fs.writeFileSync(filepath, buffer);
+        try {
+            return await analyzeThreeMf(filepath);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    }
+
+    it('aggregates geometry from a production-extension part referenced by p:path', async () => {
+        const root = `<?xml version="1.0"?>
+<model unit="millimeter" ${NS}>
+  <resources>
+    <object id="2" type="model"><components><component objectid="1" p:path="/3D/Objects/object_1.model"/></components></object>
+  </resources>
+  <build><item objectid="2"/></build>
+</model>`;
+        const result = await analyzeZip({
+            '_rels/.rels': rels,
+            '3D/3dmodel.model': root,
+            '3D/Objects/object_1.model': tetraObject('1'),
+        });
+        expect(result.geometry?.triangleCount).toBe(4);
+        expect(result.geometry?.bbox).toEqual({ x: 2, y: 3, z: 4 });
+        expect(result.geometry?.volume).toBeCloseTo(4, 3);
+    });
+
+    it('keeps object ids distinct across parts (no collision) and counts each built object', async () => {
+        const root = `<?xml version="1.0"?>
+<model unit="millimeter" ${NS}>
+  <resources>
+    <object id="3" type="model"><components>
+      <component objectid="1" p:path="/3D/Objects/object_1.model"/>
+      <component objectid="1" p:path="/3D/Objects/object_2.model"/>
+    </components></object>
+  </resources>
+  <build><item objectid="3"/></build>
+</model>`;
+        const result = await analyzeZip({
+            '_rels/.rels': rels,
+            '3D/3dmodel.model': root,
+            '3D/Objects/object_1.model': tetraObject('1'),
+            '3D/Objects/object_2.model': triObject('1'),
+        });
+        expect(result.geometry?.triangleCount).toBe(5); // 4 (tetra) + 1 (triangle)
+    });
+
+    it('falls back to scraping all meshes when there is no build section', async () => {
+        const result = await analyzeZip({ '3D/3dmodel.model': tetraObject('1') });
+        expect(result.geometry?.triangleCount).toBe(4);
+        expect(result.geometry?.bbox).toEqual({ x: 2, y: 3, z: 4 });
     });
 });
 

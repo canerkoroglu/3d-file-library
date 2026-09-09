@@ -24,6 +24,10 @@ const VERTEX_RE = /<vertex\s+[^>]*x="([^"]+)"[^>]*y="([^"]+)"[^>]*z="([^"]+)"/g;
 const TRIANGLE_RE = /<triangle\s+[^>]*v1="(\d+)"[^>]*v2="(\d+)"[^>]*v3="(\d+)"/g;
 const METADATA_RE = /<metadata\s+name="([^"]+)"[^>]*>([^<]*)<\/metadata>/g;
 const MESH_RE = /<mesh\b[\s\S]*?<\/mesh>/g;
+const OBJECT_RE = /<object\b([^>]*)>([\s\S]*?)<\/object>/g;
+const COMPONENT_RE = /<component\b([^>]*?)\/?>/g;
+const BUILD_RE = /<build\b[^>]*>([\s\S]*?)<\/build>/;
+const ITEM_RE = /<item\b([^>]*?)\/?>/g;
 
 function decodeEntities(text: string): string {
     return text
@@ -35,14 +39,16 @@ function decodeEntities(text: string): string {
         .trim();
 }
 
-/** Parses the core 3MF model XML with regexes; meshes can be tens of MB so a DOM is avoided. */
-export function analyzeModelXml(xml: string): { geometry: GeometryStats | null; metadata: Record<string, string> } {
+function extractMetadata(xml: string): Record<string, string> {
     const metadata: Record<string, string> = {};
     for (const match of xml.matchAll(METADATA_RE)) {
         metadata[match[1]] = decodeEntities(match[2]);
     }
+    return metadata;
+}
 
-    const acc = new GeometryAccumulator();
+/** Scrapes every <mesh> in the XML fragment into the accumulator; returns the number of meshes. */
+function accumulateMeshes(xml: string, acc: GeometryAccumulator): number {
     const xs: number[] = [];
     const ys: number[] = [];
     const zs: number[] = [];
@@ -66,8 +72,127 @@ export function analyzeModelXml(xml: string): { geometry: GeometryStats | null; 
             acc.addTriangle(xs[a], ys[a], zs[a], xs[b], ys[b], zs[b], xs[c], ys[c], zs[c]);
         }
     }
+    return meshes;
+}
 
-    return { geometry: meshes > 0 ? acc.result() : null, metadata };
+/** Parses one 3MF model part with regexes; meshes can be tens of MB so a DOM is avoided. */
+export function analyzeModelXml(xml: string): { geometry: GeometryStats | null; metadata: Record<string, string> } {
+    const acc = new GeometryAccumulator();
+    const meshes = accumulateMeshes(xml, acc);
+    return { geometry: meshes > 0 ? acc.result() : null, metadata: extractMetadata(xml) };
+}
+
+/** Reads an unprefixed attribute, guarding against matching a longer name's suffix (e.g. `id` in `objectid`). */
+function attr(attrs: string, name: string): string | undefined {
+    const m = attrs.match(new RegExp(`(?:^|\\s)${name}="([^"]+)"`));
+    return m ? m[1] : undefined;
+}
+
+/** The production-extension path attribute, tolerating any namespace prefix (`p:path`, `path`, …). */
+function pathAttr(attrs: string): string | undefined {
+    const m = attrs.match(/(?:^|\s)(?:[A-Za-z0-9]+:)?path="([^"]+)"/);
+    return m ? m[1] : undefined;
+}
+
+function normalizePath(p: string): string {
+    return p.replace(/^\/+/, '');
+}
+
+interface PartRef {
+    objectId: string;
+    /** Model part the object lives in (production extension); undefined = same part. */
+    path?: string;
+}
+interface PartObject {
+    /** The `<object>` body when it holds a mesh directly. */
+    meshBody?: string;
+    components?: PartRef[];
+}
+interface ParsedPart {
+    objects: Map<string, PartObject>;
+    build: PartRef[];
+}
+
+/**
+ * Parses a model part's objects (mesh or components) and build items. Transforms are ignored:
+ * bounding-box dimensions are translation-invariant, matching the single-part scraping path.
+ */
+function parseModelParts(xml: string): ParsedPart {
+    const objects = new Map<string, PartObject>();
+    for (const match of xml.matchAll(OBJECT_RE)) {
+        const id = attr(match[1], 'id');
+        if (!id) continue;
+        const body = match[2];
+        if (/<mesh\b/.test(body)) {
+            objects.set(id, { meshBody: body });
+        } else if (/<component\b/.test(body)) {
+            const components: PartRef[] = [];
+            for (const c of body.matchAll(COMPONENT_RE)) {
+                const objectId = attr(c[1], 'objectid');
+                if (objectId) components.push({ objectId, path: pathAttr(c[1]) });
+            }
+            objects.set(id, { components });
+        } else {
+            objects.set(id, {});
+        }
+    }
+
+    const build: PartRef[] = [];
+    const buildMatch = xml.match(BUILD_RE);
+    if (buildMatch) {
+        for (const item of buildMatch[1].matchAll(ITEM_RE)) {
+            const objectId = attr(item[1], 'objectid');
+            if (objectId) build.push({ objectId, path: pathAttr(item[1]) });
+        }
+    }
+    return { objects, build };
+}
+
+/**
+ * Sums geometry across every model part, following build items and components — including
+ * cross-part `p:path` references from the 3MF production extension — so only built objects are
+ * counted, each once (object ids are resolved per part, so ids that collide across parts are
+ * kept distinct). Falls back to scraping every mesh when nothing resolves (e.g. no build items).
+ */
+function aggregateGeometry(parts: Map<string, string>, rootPath: string): GeometryStats | null {
+    const acc = new GeometryAccumulator();
+    const parsed = new Map<string, ParsedPart>();
+    const getPart = (p: string): ParsedPart => {
+        let part = parsed.get(p);
+        if (!part) {
+            part = parseModelParts(parts.get(p) ?? '');
+            parsed.set(p, part);
+        }
+        return part;
+    };
+
+    const counted = new Set<string>();
+    const resolve = (partPath: string, objectId: string, stack: Set<string>): void => {
+        const key = `${partPath}#${objectId}`;
+        if (stack.has(key)) return; // guard against a component cycle
+        const object = getPart(partPath).objects.get(objectId);
+        if (!object) return;
+        if (object.meshBody !== undefined) {
+            if (!counted.has(key)) {
+                counted.add(key);
+                accumulateMeshes(object.meshBody, acc);
+            }
+            return;
+        }
+        for (const component of object.components ?? []) {
+            resolve(component.path ? normalizePath(component.path) : partPath, component.objectId, new Set(stack).add(key));
+        }
+    };
+
+    for (const item of getPart(rootPath).build) {
+        resolve(item.path ? normalizePath(item.path) : rootPath, item.objectId, new Set());
+    }
+
+    // Nothing resolved (no build section, or unresolved references): fall back to every mesh.
+    if (acc.triangleCount === 0) {
+        for (const xml of parts.values()) accumulateMeshes(xml, acc);
+    }
+    return acc.result();
 }
 
 type KeyValue = { key?: string; value?: string };
@@ -155,15 +280,15 @@ export async function analyzeThreeMf(filepath: string): Promise<ThreeMfAnalysis>
         if (match) modelPath = match[1];
     }
 
-    let geometry: GeometryStats | null = null;
-    let coreMeta: Record<string, string> = {};
-    const modelFile = zip.file(modelPath) ?? zip.file(/\.model$/i)[0];
-    if (modelFile) {
-        const xml = await modelFile.async('string');
-        const analysed = analyzeModelXml(xml);
-        geometry = analysed.geometry;
-        coreMeta = analysed.metadata;
+    // Read every model part: slicers split geometry into 3D/Objects/*.model (production extension).
+    const parts = new Map<string, string>();
+    for (const file of zip.file(/\.model$/i)) {
+        parts.set(normalizePath(file.name), await file.async('string'));
     }
+    const rootPath = normalizePath(modelPath);
+    const rootXml = parts.get(rootPath) ?? parts.values().next().value ?? '';
+    const coreMeta = extractMetadata(rootXml);
+    const geometry = aggregateGeometry(parts, rootPath);
 
     const configNames = ['Metadata/project_settings.config', 'Metadata/slice_info.config', 'Metadata/Slic3r_PE.config'];
     const configs: Record<string, string> = {};
