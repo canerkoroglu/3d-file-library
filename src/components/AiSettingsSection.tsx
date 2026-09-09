@@ -16,11 +16,13 @@ export default function AiSettingsSection() {
     const [testing, setTesting] = useState(false);
     const [result, setResult] = useState<AiConnectionResult | null>(null);
     const [saving, setSaving] = useState(false);
+    const [timeoutSec, setTimeoutSec] = useState(90);
 
     useEffect(() => {
         if (!aiSettings || dirty) return;
         setBaseUrl(aiSettings.baseUrl);
         setModel(aiSettings.model);
+        setTimeoutSec(Math.round(aiSettings.timeoutMs / 1000));
     }, [aiSettings, dirty]);
 
     if (!aiSettings) return null;
@@ -29,6 +31,7 @@ export default function AiSettingsSection() {
     const pendingUpdate = () => ({
         baseUrl,
         model,
+        timeoutMs: Math.round(timeoutSec * 1000),
         ...(clearKey ? { apiKey: null } : apiKey.trim() ? { apiKey } : {}),
     });
 
@@ -40,7 +43,9 @@ export default function AiSettingsSection() {
             setResult(outcome);
             // Pick a sensible model when the configured one is not on the server.
             if (outcome.ok && outcome.modelAvailable === false && outcome.models.length > 0) {
-                const preferred = outcome.models.find((m) => /qwen/i.test(m)) ?? outcome.models[0];
+                const chatModels = outcome.models.filter((m) => !/embed/i.test(m));
+                const pool = chatModels.length > 0 ? chatModels : outcome.models;
+                const preferred = pool.find((m) => /qwen/i.test(m)) ?? pool[0];
                 setModel(preferred);
                 setDirty(true);
             }
@@ -172,6 +177,22 @@ export default function AiSettingsSection() {
                                 </button>
                             )}
                         </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">Response timeout (seconds)</label>
+                        <input
+                            type="number"
+                            min={5}
+                            max={600}
+                            value={timeoutSec}
+                            onChange={(e) => {
+                                setTimeoutSec(Math.max(5, Math.min(600, Math.round(Number(e.target.value) || 0))));
+                                setDirty(true);
+                            }}
+                            className="input w-full font-mono text-sm"
+                            data-testid="ai-timeout"
+                        />
+                        <p className="text-xs text-text-secondary mt-1">Raise this for large remote models; a 27B model can take over a minute per file.</p>
                     </div>
                 </div>
 
