@@ -13,6 +13,9 @@ jobs:
   release:
     strategy:
       fail-fast: false
+      # Publish one platform at a time: concurrent electron-builder jobs racing to create the
+      # same draft GitHub release can fail (the first creates it, the others collide).
+      max-parallel: 1
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
