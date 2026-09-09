@@ -138,15 +138,24 @@ function describeFetchError(error: unknown, baseUrl: string): AiError {
 }
 
 async function request(config: AiConfig, path: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-        return await fetch(`${config.baseUrl}${path}`, { ...init, headers: { ...headersFor(config), ...(init.headers as Record<string, string> | undefined) }, signal: controller.signal });
-    } catch (error) {
-        throw describeFetchError(error, config.baseUrl);
-    } finally {
-        clearTimeout(timer);
+    // One retry for a transient connect failure: private/VPN endpoints (a LAN host
+    // behind a tunnel) occasionally blip on connect. Never retry a response-read
+    // timeout ('timeout'), which could re-trigger generation on the server.
+    let lastError: AiError | undefined;
+    for (let attempt = 0; attempt <= 1; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            return await fetch(`${config.baseUrl}${path}`, { ...init, headers: { ...headersFor(config), ...(init.headers as Record<string, string> | undefined) }, signal: controller.signal });
+        } catch (error) {
+            lastError = describeFetchError(error, config.baseUrl);
+            if (lastError.kind !== 'unreachable') throw lastError;
+        } finally {
+            clearTimeout(timer);
+        }
+        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 400));
     }
+    throw lastError ?? new AiError(`Could not reach the AI server at ${config.baseUrl}.`, 'unreachable');
 }
 
 async function detectFlavor(config: AiConfig): Promise<Flavor> {
