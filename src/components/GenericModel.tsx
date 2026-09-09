@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
 import * as THREE from 'three';
 import type { FileType } from '../types';
+import { loadThreeMfObject } from '../lib/threeMf';
 
 export interface ViewerDisplayOptions {
     wireframe: boolean;
@@ -52,6 +53,11 @@ async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THRE
     const url = URL.createObjectURL(blob);
     try {
         return await new ThreeMFLoader().loadAsync(url);
+    } catch (error) {
+        // Slicers (Bambu, Orca, Prusa) split geometry into external model parts via the
+        // 3MF production extension, which the stock loader cannot resolve. Parse it ourselves.
+        console.warn('ThreeMFLoader failed; using production-extension fallback:', error);
+        return await loadThreeMfObject(buffer);
     } finally {
         URL.revokeObjectURL(url);
     }
