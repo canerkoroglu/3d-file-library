@@ -137,25 +137,32 @@ function describeFetchError(error: unknown, baseUrl: string): AiError {
     return new AiError(text.trim().slice(0, 200) || 'Unknown AI error', 'other');
 }
 
-async function request(config: AiConfig, path: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-    // One retry for a transient connect failure: private/VPN endpoints (a LAN host
-    // behind a tunnel) occasionally blip on connect. Never retry a response-read
-    // timeout ('timeout'), which could re-trigger generation on the server.
+/**
+ * Fetch with a per-request timeout and one retry on a transient connect failure:
+ * private/VPN endpoints (a LAN host behind a tunnel) occasionally blip on connect. A
+ * response-read timeout ('timeout') is never retried — it could re-trigger generation.
+ */
+async function fetchWithConnectRetry(url: string, init: RequestInit, timeoutMs: number, baseUrl: string): Promise<Response> {
     let lastError: AiError | undefined;
     for (let attempt = 0; attempt <= 1; attempt++) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-            return await fetch(`${config.baseUrl}${path}`, { ...init, headers: { ...headersFor(config), ...(init.headers as Record<string, string> | undefined) }, signal: controller.signal });
+            return await fetch(url, { ...init, signal: controller.signal });
         } catch (error) {
-            lastError = describeFetchError(error, config.baseUrl);
+            lastError = describeFetchError(error, baseUrl);
             if (lastError.kind !== 'unreachable') throw lastError;
         } finally {
             clearTimeout(timer);
         }
         if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 400));
     }
-    throw lastError ?? new AiError(`Could not reach the AI server at ${config.baseUrl}.`, 'unreachable');
+    throw lastError ?? new AiError(`Could not reach the AI server at ${baseUrl}.`, 'unreachable');
+}
+
+function request(config: AiConfig, path: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+    const headers = { ...headersFor(config), ...(init.headers as Record<string, string> | undefined) };
+    return fetchWithConnectRetry(`${config.baseUrl}${path}`, { ...init, headers }, timeoutMs, config.baseUrl);
 }
 
 async function detectFlavor(config: AiConfig): Promise<Flavor> {
@@ -229,16 +236,12 @@ async function chatOllama(config: AiConfig, messages: ChatMessage[], options: Ch
         ...(options.json ? { format: 'json' } : {}),
         options: { temperature: options.temperature ?? 0.2, num_predict: options.maxTokens ?? 700 },
     };
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? config.timeoutMs);
-    let response: Response;
-    try {
-        response = await fetch(`${originOf(config.baseUrl)}/api/chat`, { method: 'POST', headers: headersFor(config), body: JSON.stringify(body), signal: controller.signal });
-    } catch (error) {
-        throw describeFetchError(error, config.baseUrl);
-    } finally {
-        clearTimeout(timer);
-    }
+    const response = await fetchWithConnectRetry(
+        `${originOf(config.baseUrl)}/api/chat`,
+        { method: 'POST', headers: headersFor(config), body: JSON.stringify(body) },
+        options.timeoutMs ?? config.timeoutMs,
+        config.baseUrl,
+    );
     if (!response.ok) throw await errorFromResponse(response, config);
     const json = (await response.json()) as { message?: { content?: string; thinking?: string }; done_reason?: string };
     return { text: json.message?.content ?? '', reasoning: json.message?.thinking, truncated: json.done_reason === 'length' };
