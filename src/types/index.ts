@@ -160,6 +160,20 @@ export interface BedSize {
     z: number;
 }
 
+/** Coverage of the semantic-search index. */
+export interface EmbeddingStats {
+    embedded: number;
+    total: number;
+}
+
+/** Outcome of a "build semantic index" pass. */
+export interface EmbeddingBuildResult {
+    embedded: number;
+    failed: number;
+    total: number;
+    cancelled: boolean;
+}
+
 export interface ZipImportRequest {
     zipPaths: string[];
     /** Watched folder the archives are extracted into. */
@@ -184,6 +198,8 @@ export interface AiSettings {
     baseUrl: string;
     /** Model name as the server knows it, e.g. qwen3:8b */
     model: string;
+    /** Embedding model for semantic "find similar" search, e.g. nomic-embed-text. Empty = off. */
+    embeddingModel: string;
     /** The key itself never leaves the main process. */
     hasApiKey: boolean;
     /** Analyse newly imported models without being asked. */
@@ -196,6 +212,7 @@ export interface AiSettingsUpdate {
     enabled?: boolean;
     baseUrl?: string;
     model?: string;
+    embeddingModel?: string;
     apiKey?: string | null;
     autoEnrich?: boolean;
     timeoutMs?: number;
@@ -333,6 +350,10 @@ export interface ElectronAPI {
     findDuplicates: () => Promise<DuplicateReport>;
     getBedSize: () => Promise<BedSize | null>;
     setBedSize: (bed: BedSize | null) => Promise<BedSize | null>;
+    findSimilar: (modelId: number, limit?: number) => Promise<Model[]>;
+    getEmbeddingStats: () => Promise<EmbeddingStats>;
+    buildEmbeddings: () => Promise<EmbeddingBuildResult>;
+    cancelEmbeddingBuild: () => Promise<void>;
     updateModelMetadata: (modelId: number, metadata: SourceMetadata) => Promise<void>;
     readFileAsBuffer: (filepath: string) => Promise<ArrayBuffer>;
     captureThumbnail: (modelId: number, imageData: string) => Promise<void>;

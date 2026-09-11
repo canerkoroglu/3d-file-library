@@ -7,6 +7,8 @@ import {
     deleteModel,
     fileTypeOf,
     findDuplicates,
+    findSimilar,
+    getEmbeddingStats,
     listAiCategories,
     listTagNames,
     forgetMissingModels,
@@ -28,6 +30,7 @@ import { cancelThumbnailRender, requestThumbnailRender, saveThumbnailFromBase64 
 import { addCustomSlicer, listSlicers, openInSlicer, removeCustomSlicer, setDefaultSlicer } from './slicers';
 import { importZipFiles } from './zipImport';
 import { getSetting, setSetting } from './settings';
+import { buildEmbeddings, cancelEmbeddingBuild } from './ai/embeddings';
 import { APP_VERSION, checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, isAutoCheckEnabled, setAutoCheckEnabled } from './updater';
 import { chatJson, getAiConfig, getAiSettings, testConnection, updateAiSettings } from './ai/provider';
 import { buildTranslationMessages, parseTranslation } from './ai/prompts';
@@ -274,6 +277,10 @@ export function setupIpcHandlers(): void {
     // ============ Duplicates ============
 
     handle('find-duplicates', () => findDuplicates());
+    handle('find-similar', (_event, modelId: number, limit?: number) => findSimilar(modelId, limit ?? 12));
+    handle('ai:embedding-stats', () => getEmbeddingStats());
+    handle('ai:build-embeddings', () => buildEmbeddings());
+    handle('ai:cancel-embeddings', () => cancelEmbeddingBuild());
 
     // ============ Printer bed ============
 

@@ -8,6 +8,7 @@ import { getSetting, setSetting } from '../settings';
 import { AI_DEFAULT_BASE_URL, AI_DEFAULT_MODEL } from '../../src/lib/aiPresets';
 import type { AiConnectionResult, AiSettings, AiSettingsUpdate } from '../../src/types';
 import type { ChatMessage } from './prompts';
+import { parseEmbeddingsResponse } from './vector';
 
 const KEYS = {
     enabled: 'ai.enabled',
@@ -16,11 +17,13 @@ const KEYS = {
     apiKey: 'ai.apiKey',
     autoEnrich: 'ai.autoEnrich',
     timeoutMs: 'ai.timeoutMs',
+    embeddingModel: 'ai.embeddingModel',
 } as const;
 
 export const AI_DEFAULTS = {
     baseUrl: AI_DEFAULT_BASE_URL,
     model: AI_DEFAULT_MODEL,
+    embeddingModel: '',
     timeoutMs: 90_000,
 };
 
@@ -38,6 +41,7 @@ interface AiConfig {
     apiKey: string | null;
     autoEnrich: boolean;
     timeoutMs: number;
+    embeddingModel: string;
 }
 
 /**
@@ -82,6 +86,7 @@ export function getAiConfig(): AiConfig {
         apiKey: decryptKey(getSetting<string | null>(KEYS.apiKey, null)),
         autoEnrich: getSetting<boolean>(KEYS.autoEnrich, false),
         timeoutMs: getSetting<number>(KEYS.timeoutMs, AI_DEFAULTS.timeoutMs),
+        embeddingModel: getSetting<string>(KEYS.embeddingModel, AI_DEFAULTS.embeddingModel).trim(),
     };
 }
 
@@ -94,6 +99,7 @@ export function getAiSettings(): AiSettings {
         hasApiKey: Boolean(config.apiKey),
         autoEnrich: config.autoEnrich,
         timeoutMs: config.timeoutMs,
+        embeddingModel: config.embeddingModel,
     };
 }
 
@@ -101,6 +107,7 @@ export function updateAiSettings(update: AiSettingsUpdate): AiSettings {
     if (update.enabled !== undefined) setSetting(KEYS.enabled, Boolean(update.enabled));
     if (update.baseUrl !== undefined) setSetting(KEYS.baseUrl, normaliseBaseUrl(update.baseUrl) || AI_DEFAULTS.baseUrl);
     if (update.model !== undefined) setSetting(KEYS.model, update.model.trim() || AI_DEFAULTS.model);
+    if (update.embeddingModel !== undefined) setSetting(KEYS.embeddingModel, update.embeddingModel.trim());
     if (update.autoEnrich !== undefined) setSetting(KEYS.autoEnrich, Boolean(update.autoEnrich));
     if (update.timeoutMs !== undefined && Number.isFinite(update.timeoutMs)) setSetting(KEYS.timeoutMs, Math.max(5_000, Math.min(600_000, update.timeoutMs)));
     if (update.apiKey === null) setSetting(KEYS.apiKey, null);
@@ -116,6 +123,7 @@ function resolveConfig(override?: AiSettingsUpdate): AiConfig {
         ...config,
         baseUrl: override.baseUrl !== undefined ? normaliseBaseUrl(override.baseUrl) || AI_DEFAULTS.baseUrl : config.baseUrl,
         model: override.model !== undefined ? override.model.trim() || config.model : config.model,
+        embeddingModel: override.embeddingModel !== undefined ? override.embeddingModel.trim() : config.embeddingModel,
         apiKey: override.apiKey === null ? null : typeof override.apiKey === 'string' && override.apiKey.trim() ? override.apiKey.trim() : config.apiKey,
         timeoutMs: override.timeoutMs ?? config.timeoutMs,
     };
@@ -218,6 +226,35 @@ export async function listModels(override?: AiSettingsUpdate): Promise<string[]>
     const entries: Array<{ id?: string; name?: string }> = json.data ?? json.models ?? [];
     const ids = entries.map((m) => m.id ?? m.name).filter((id): id is string => Boolean(id));
     return [...new Set(ids)].sort();
+}
+
+/**
+ * Embeds one or more texts into vectors with the configured embedding model. Both OpenAI-compatible
+ * (`POST /embeddings`) and Ollama (`POST /api/embed`) servers accept the same `{ model, input }`
+ * body and differ only in path and response shape (handled by parseEmbeddingsResponse).
+ */
+export async function embed(texts: string[], override?: AiSettingsUpdate): Promise<number[][]> {
+    const config = resolveConfig(override);
+    if (!config.enabled) throw new AiError('The AI assistant is turned off.', 'disabled');
+    const model = config.embeddingModel.trim();
+    if (!model) throw new AiError('No embedding model is set (Settings → AI assistant).', 'model');
+    if (texts.length === 0) return [];
+
+    const flavor = await detectFlavor(config);
+    const url = flavor === 'ollama' ? `${originOf(config.baseUrl)}/api/embed` : `${config.baseUrl}/embeddings`;
+    const response = await fetchWithConnectRetry(
+        url,
+        { method: 'POST', headers: headersFor(config), body: JSON.stringify({ model, input: texts }) },
+        config.timeoutMs,
+        config.baseUrl,
+    );
+    if (!response.ok) throw await errorFromResponse(response, { ...config, model });
+
+    const vectors = parseEmbeddingsResponse(await response.json());
+    if (vectors.length !== texts.length) {
+        throw new AiError(`The embedding server returned ${vectors.length} vectors for ${texts.length} inputs.`, 'response');
+    }
+    return vectors;
 }
 
 interface ChatResult {

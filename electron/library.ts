@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 import { getDatabase } from './database';
 import { getThumbnailDir, isInsideDir } from './paths';
 import { buildFtsMatch, parseSearchQuery } from '../src/lib/searchQuery';
+import { cosineSimilarity, deserializeVector, embeddingText, serializeVector } from './ai/vector';
 import type {
     AiEnrichment,
     AppNotice,
@@ -824,4 +825,62 @@ export function findDuplicates(): DuplicateReport {
         .sort((a, b) => b.totalSize - a.totalSize);
 
     return { groups, nearDuplicateGroups, totalWasted, groupCount: groups.length, unhashedCount: unhashed.count };
+}
+
+// ============ Semantic search (embeddings) ============
+
+/** Available (non-missing) models whose embedding is absent or was made with a different model. */
+export function getModelsNeedingEmbedding(embeddingModel: string): Array<{ id: number; text: string }> {
+    const db = getDatabase();
+    const rows = db.prepare(`
+        SELECT ${MODEL_COLUMNS} FROM models m
+        LEFT JOIN model_embeddings e ON e.model_id = m.id
+        WHERE m.missing_since IS NULL AND (e.model_id IS NULL OR e.model != ?)
+    `).all(embeddingModel) as ModelRow[];
+    return rows
+        .map((row) => ({ id: row.id, text: embeddingText(rowToModel(row)) }))
+        .filter((entry) => entry.text.length > 0);
+}
+
+/** Stores (or replaces) one model's embedding vector. */
+export function setEmbedding(modelId: number, model: string, vector: number[]): void {
+    getDatabase().prepare(`
+        INSERT INTO model_embeddings (model_id, model, dims, vector, generated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(model_id) DO UPDATE SET model = excluded.model, dims = excluded.dims, vector = excluded.vector, generated_at = excluded.generated_at
+    `).run(modelId, model, vector.length, serializeVector(vector), new Date().toISOString());
+}
+
+/** Returns the available models most similar to the given one, by cosine of their embeddings. */
+export function findSimilar(modelId: number, limit = 12): Model[] {
+    const db = getDatabase();
+    const target = db.prepare('SELECT vector FROM model_embeddings WHERE model_id = ?').get(modelId) as { vector: Buffer } | undefined;
+    if (!target) return [];
+    const targetVector = deserializeVector(target.vector);
+
+    const rows = db.prepare(`
+        SELECT e.model_id AS id, e.vector AS vector
+        FROM model_embeddings e JOIN models m ON m.id = e.model_id
+        WHERE m.missing_since IS NULL AND e.model_id != ?
+    `).all(modelId) as Array<{ id: number; vector: Buffer }>;
+
+    const scored = rows
+        .map((row) => ({ id: row.id, score: cosineSimilarity(targetVector, deserializeVector(row.vector)) }))
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+    if (scored.length === 0) return [];
+
+    const placeholders = scored.map(() => '?').join(',');
+    const models = db.prepare(`SELECT ${MODEL_COLUMNS} FROM models m WHERE m.id IN (${placeholders})`).all(...scored.map((s) => s.id)) as ModelRow[];
+    const byId = new Map(models.map((row) => [row.id, rowToModel(row)]));
+    return scored.map((s) => byId.get(s.id)).filter((m): m is Model => Boolean(m));
+}
+
+/** How many available models already have an embedding, and how many there are in total. */
+export function getEmbeddingStats(): { embedded: number; total: number } {
+    const db = getDatabase();
+    const embedded = (db.prepare('SELECT COUNT(*) AS c FROM model_embeddings e JOIN models m ON m.id = e.model_id WHERE m.missing_since IS NULL').get() as { c: number }).c;
+    const total = (db.prepare('SELECT COUNT(*) AS c FROM models WHERE missing_since IS NULL').get() as { c: number }).c;
+    return { embedded, total };
 }

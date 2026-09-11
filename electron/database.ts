@@ -223,6 +223,22 @@ const MIGRATIONS: Array<{ version: number; name: string; up: (db: Database.Datab
             `);
         },
     },
+    {
+        version: 7,
+        name: 'embeddings for semantic search',
+        up: (db) => {
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS model_embeddings (
+                    model_id INTEGER PRIMARY KEY,
+                    model TEXT NOT NULL,
+                    dims INTEGER NOT NULL,
+                    vector BLOB NOT NULL,
+                    generated_at TEXT NOT NULL,
+                    FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE
+                );
+            `);
+        },
+    },
 ];
 
 const DEFAULT_TAGS = [
