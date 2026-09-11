@@ -1,0 +1,51 @@
+# Modelist AI backend: a GPU-accelerated, OpenAI-compatible LLM server (Ollama).
+# Serves the chat model AND the embedding model Modelist's "Similar models" uses.
+#
+#   cp .env.example .env      # optional: change models/port
+#   docker compose up -d      # starts the server and pulls the models
+#
+# Requires: NVIDIA driver on the host + nvidia-container-toolkit (see README.md).
+
+name: modelist-ai
+
+services:
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    container_name: modelist-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-models:/root/.ollama          # downloaded models persist here
+    environment:
+      OLLAMA_HOST: 0.0.0.0                    # reachable from other machines/containers
+      OLLAMA_KEEP_ALIVE: "24h"               # keep the model resident in VRAM between requests
+      OLLAMA_FLASH_ATTENTION: "1"            # faster + less VRAM on Ada cards (4080 Super)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all                     # or: device_ids: ["0"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # One-shot: waits for the server, pulls the models Modelist needs, then exits.
+  model-puller:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      CHAT_MODEL: ${CHAT_MODEL:-qwen3:8b}
+      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+    entrypoint: ["/bin/sh", "-c", "ollama pull \"$${CHAT_MODEL}\" && ollama pull \"$${EMBED_MODEL}\" && echo 'Models ready.'"]
+    restart: "no"
+
+volumes:
+  ollama-models:
