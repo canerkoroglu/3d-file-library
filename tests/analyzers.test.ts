@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { analyzeStl, isBinaryStl } from '../electron/analyzers/stl';
 import { analyzeObj } from '../electron/analyzers/obj';
+import { analyzeGlb } from '../electron/analyzers/glb';
 import { analyzeModelXml, analyzeThreeMf, parseSlicerConfigs } from '../electron/analyzers/threemf';
 import JSZip from 'jszip';
 import { detectLicense, detectSource, findSidecars } from '../electron/analyzers/sidecars';
@@ -294,5 +295,67 @@ describe('detectSource', () => {
 describe('GeometryAccumulator', () => {
     it('returns null when nothing was added', () => {
         expect(new GeometryAccumulator().result()).toBeNull();
+    });
+});
+
+describe('GLB analyzer', () => {
+    const gltfDoc = {
+        meshes: [{ primitives: [{ indices: 0, attributes: { POSITION: 1 } }] }],
+        accessors: [
+            { count: 6, type: 'SCALAR' }, // 6 indices -> 2 triangles
+            { count: 4, type: 'VEC3', min: [0, 0, 0], max: [2, 3, 4] },
+        ],
+    };
+    function makeGlb(json: unknown): Buffer {
+        const jsonBuf = Buffer.from(JSON.stringify(json), 'utf8');
+        const pad = (4 - (jsonBuf.length % 4)) % 4;
+        const jsonPadded = Buffer.concat([jsonBuf, Buffer.alloc(pad, 0x20)]);
+        const header = Buffer.alloc(12);
+        header.writeUInt32LE(0x46546c67, 0); // "glTF"
+        header.writeUInt32LE(2, 4);
+        header.writeUInt32LE(12 + 8 + jsonPadded.length, 8);
+        const chunkHeader = Buffer.alloc(8);
+        chunkHeader.writeUInt32LE(jsonPadded.length, 0);
+        chunkHeader.writeUInt32LE(0x4e4f534a, 4); // "JSON"
+        return Buffer.concat([header, chunkHeader, jsonPadded]);
+    }
+    async function analyzeTemp(name: string, content: Buffer | string) {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modelist-glb-'));
+        const fp = path.join(dir, name);
+        fs.writeFileSync(fp, content);
+        try {
+            return await analyzeGlb(fp);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    }
+
+    it('reads triangle count and bbox from a binary .glb', async () => {
+        const result = await analyzeTemp('model.glb', makeGlb(gltfDoc));
+        expect(result?.triangleCount).toBe(2);
+        expect(result?.bbox).toEqual({ x: 2, y: 3, z: 4 });
+        expect(result?.volume).toBeNull();
+    });
+
+    it('reads a plain .gltf JSON file', async () => {
+        const result = await analyzeTemp('model.gltf', JSON.stringify(gltfDoc));
+        expect(result?.triangleCount).toBe(2);
+        expect(result?.bbox).toEqual({ x: 2, y: 3, z: 4 });
+    });
+
+    it('counts non-indexed primitives from POSITION and skips non-triangle modes', async () => {
+        const doc = {
+            meshes: [{ primitives: [
+                { attributes: { POSITION: 0 } }, // no indices -> 9/3 = 3 triangles
+                { mode: 0, indices: 1, attributes: { POSITION: 0 } }, // POINTS -> skipped
+            ] }],
+            accessors: [
+                { count: 9, type: 'VEC3', min: [-1, -1, -1], max: [1, 1, 1] },
+                { count: 30, type: 'SCALAR' },
+            ],
+        };
+        const result = await analyzeTemp('model.glb', makeGlb(doc));
+        expect(result?.triangleCount).toBe(3);
+        expect(result?.bbox).toEqual({ x: 2, y: 2, z: 2 });
     });
 });

@@ -10,6 +10,7 @@ import { hashFile } from '../analyzers/hash';
 import { analyzeStl } from '../analyzers/stl';
 import { analyzeObj } from '../analyzers/obj';
 import { analyzeThreeMf } from '../analyzers/threemf';
+import { analyzeGlb } from '../analyzers/glb';
 import { findSidecars } from '../analyzers/sidecars';
 import type { AnalysisJob, AnalysisResult, GeometryStats, WorkerRequest, WorkerResponse } from '../analyzers/types';
 import type { PrintMetadata, ThumbnailSource } from '../../src/types';
@@ -60,6 +61,8 @@ async function analyze(job: AnalysisJob): Promise<AnalysisResult> {
             geometry = analysis.geometry;
             printMeta = analysis.printMeta;
             embedded = analysis.thumbnail;
+        } else if (job.fileType === 'glb') {
+            geometry = await analyzeGlb(job.filepath);
         }
     } catch (error) {
         console.error(`[Indexer] Geometry analysis failed for ${job.filepath}:`, error);
