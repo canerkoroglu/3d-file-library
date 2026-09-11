@@ -43,7 +43,22 @@ export function startFakeLlm() {
                 res.end(JSON.stringify(payload));
             };
             if (req.method === 'GET' && req.url === '/v1/models') {
-                return json(200, { object: 'list', data: [{ id: 'fake-qwen' }, { id: 'other-model' }] });
+                return json(200, { object: 'list', data: [{ id: 'fake-qwen' }, { id: 'other-model' }, { id: 'fake-embed' }] });
+            }
+            if (req.method === 'POST' && req.url === '/v1/embeddings') {
+                const payload = JSON.parse(body || '{}');
+                const inputs = Array.isArray(payload.input) ? payload.input : [payload.input];
+                // Deterministic bag-of-words vectors so texts sharing words come out similar.
+                const embed = (text) => {
+                    const v = new Array(32).fill(0);
+                    for (const word of String(text).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)) {
+                        let h = 0;
+                        for (const ch of word) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+                        v[h % 32] += 1;
+                    }
+                    return v;
+                };
+                return json(200, { object: 'list', data: inputs.map((t, i) => ({ object: 'embedding', index: i, embedding: embed(t) })) });
             }
             if (req.method === 'POST' && req.url === '/v1/chat/completions') {
                 const payload = JSON.parse(body || '{}');

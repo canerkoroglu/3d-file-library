@@ -17,13 +17,21 @@ export default function AiSettingsSection() {
     const [result, setResult] = useState<AiConnectionResult | null>(null);
     const [saving, setSaving] = useState(false);
     const [timeoutSec, setTimeoutSec] = useState(90);
+    const [embeddingModel, setEmbeddingModel] = useState('');
+    const [building, setBuilding] = useState(false);
+    const [embeddingStats, setEmbeddingStats] = useState<{ embedded: number; total: number } | null>(null);
 
     useEffect(() => {
         if (!aiSettings || dirty) return;
         setBaseUrl(aiSettings.baseUrl);
         setModel(aiSettings.model);
         setTimeoutSec(Math.round(aiSettings.timeoutMs / 1000));
+        setEmbeddingModel(aiSettings.embeddingModel);
     }, [aiSettings, dirty]);
+
+    useEffect(() => {
+        window.electronAPI.getEmbeddingStats().then(setEmbeddingStats).catch(() => setEmbeddingStats(null));
+    }, []);
 
     if (!aiSettings) return null;
 
@@ -31,6 +39,7 @@ export default function AiSettingsSection() {
     const pendingUpdate = () => ({
         baseUrl,
         model,
+        embeddingModel,
         timeoutMs: Math.round(timeoutSec * 1000),
         ...(clearKey ? { apiKey: null } : apiKey.trim() ? { apiKey } : {}),
     });
@@ -65,6 +74,18 @@ export default function AiSettingsSection() {
             setDirty(false);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const buildIndex = async () => {
+        setBuilding(true);
+        try {
+            await window.electronAPI.buildEmbeddings();
+            setEmbeddingStats(await window.electronAPI.getEmbeddingStats());
+        } catch (error) {
+            reportError('Could not build the semantic index', error);
+        } finally {
+            setBuilding(false);
         }
     };
 
@@ -197,6 +218,24 @@ export default function AiSettingsSection() {
                         />
                         <p className="text-xs text-text-secondary mt-1">Raise this for large remote models; a 27B model can take over a minute per file.</p>
                     </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                            Embedding model <span className="normal-case font-normal">(optional — enables semantic &quot;find similar&quot;)</span>
+                        </label>
+                        <input
+                            type="text"
+                            list="ai-model-options"
+                            value={embeddingModel}
+                            onChange={(e) => {
+                                setEmbeddingModel(e.target.value);
+                                setDirty(true);
+                            }}
+                            placeholder="nomic-embed-text"
+                            className="input w-full font-mono text-sm"
+                            spellCheck={false}
+                            data-testid="ai-embedding-model"
+                        />
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -249,6 +288,26 @@ export default function AiSettingsSection() {
                         )}
                         <span className="text-xs text-text-secondary">
                             {analysed.toLocaleString()} models in the library. A local 8B model takes a few seconds per file; you can keep working meanwhile.
+                        </span>
+                    </div>
+                </div>
+
+                <div className="border-t border-accent-gray pt-4 space-y-3">
+                    <div className="font-medium text-text-primary text-sm">Semantic search</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {building ? (
+                            <button onClick={() => void window.electronAPI.cancelEmbeddingBuild()} className="btn btn-secondary text-sm">
+                                <Square size={14} /> Stop building
+                            </button>
+                        ) : (
+                            <button onClick={() => void buildIndex()} disabled={!aiSettings.enabled || !embeddingModel.trim()} className="btn btn-secondary text-sm disabled:opacity-50" data-testid="ai-build-embeddings">
+                                <Play size={14} /> Build semantic index
+                            </button>
+                        )}
+                        <span className="text-xs text-text-secondary">
+                            {embeddingStats
+                                ? `${embeddingStats.embedded.toLocaleString()} / ${embeddingStats.total.toLocaleString()} models indexed for "find similar".`
+                                : 'Set an embedding model and build the index to enable "find similar".'}
                         </span>
                     </div>
                 </div>

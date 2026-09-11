@@ -275,4 +275,22 @@ export const scenarios = [
             await app.evaluate(clickButton('Close'));
         },
     },
+    {
+        name: 'semantic search: build index and find similar',
+        async run({ app, fakeLlm }) {
+            await app.evaluate(`window.electronAPI.updateAiSettings({ enabled: true, baseUrl: ${JSON.stringify(fakeLlm.baseUrl)}, model: 'fake-qwen', embeddingModel: 'fake-embed' })`);
+
+            const build = await app.evaluate(`window.electronAPI.buildEmbeddings()`);
+            assert.ok(build.total >= 2 && build.embedded === build.total, `embedded every model (got ${build.embedded}/${build.total})`);
+
+            const stats = await app.evaluate(`window.electronAPI.getEmbeddingStats()`);
+            assert.ok(stats.embedded >= 2, 'embedding stats report the indexed models');
+
+            const first = (await app.evaluate(`window.electronAPI.getModels({ limit: 1 })`)).items[0];
+            const similar = await app.evaluate(`window.electronAPI.findSimilar(${first.id}, 5)`);
+            assert.ok(Array.isArray(similar) && similar.length >= 1, 'find-similar returns at least one model');
+            assert.ok(similar.every((m) => m.id !== first.id), 'the query model is excluded from its own results');
+            assert.ok(similar.every((m) => Array.isArray(m.tags)), 'similar models are hydrated with tags');
+        },
+    },
 ];

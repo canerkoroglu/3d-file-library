@@ -852,7 +852,7 @@ export function setEmbedding(modelId: number, model: string, vector: number[]): 
 }
 
 /** Returns the available models most similar to the given one, by cosine of their embeddings. */
-export function findSimilar(modelId: number, limit = 12): Model[] {
+export function findSimilar(modelId: number, limit = 12): ModelWithTags[] {
     const db = getDatabase();
     const target = db.prepare('SELECT vector FROM model_embeddings WHERE model_id = ?').get(modelId) as { vector: Buffer } | undefined;
     if (!target) return [];
@@ -874,7 +874,8 @@ export function findSimilar(modelId: number, limit = 12): Model[] {
     const placeholders = scored.map(() => '?').join(',');
     const models = db.prepare(`SELECT ${MODEL_COLUMNS} FROM models m WHERE m.id IN (${placeholders})`).all(...scored.map((s) => s.id)) as ModelRow[];
     const byId = new Map(models.map((row) => [row.id, rowToModel(row)]));
-    return scored.map((s) => byId.get(s.id)).filter((m): m is Model => Boolean(m));
+    const ordered = scored.map((s) => byId.get(s.id)).filter((m): m is Model => Boolean(m));
+    return hydrate(ordered);
 }
 
 /** How many available models already have an embedding, and how many there are in total. */

@@ -350,7 +350,7 @@ export interface ElectronAPI {
     findDuplicates: () => Promise<DuplicateReport>;
     getBedSize: () => Promise<BedSize | null>;
     setBedSize: (bed: BedSize | null) => Promise<BedSize | null>;
-    findSimilar: (modelId: number, limit?: number) => Promise<Model[]>;
+    findSimilar: (modelId: number, limit?: number) => Promise<ModelWithTags[]>;
     getEmbeddingStats: () => Promise<EmbeddingStats>;
     buildEmbeddings: () => Promise<EmbeddingBuildResult>;
     cancelEmbeddingBuild: () => Promise<void>;

@@ -6,7 +6,8 @@ import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus, Pencil, FileText
 import { useStore } from '../store/store';
 import GenericModel, { type ViewerDisplayOptions } from './GenericModel';
 import MetadataEditor from './MetadataEditor';
-import { exceedsBed, formatDimensions, formatFileSize, formatTriangles, formatVolume } from '../lib/format';
+import { exceedsBed, formatDimensions, formatFileSize, formatTriangles, formatVolume, thumbnailUrl } from '../lib/format';
+import type { ModelWithTags } from '../types';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -18,7 +19,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function ModelViewer() {
-    const { selectedModel, closeViewer, tags, addTagToModel, removeTagFromModel, collections, loadModels, slicers, openInSlicer, openSettings, reportError, aiSettings, aiProgress, enrichModels, applySuggestedTags, setSearchQuery, bedSize } = useStore();
+    const { selectedModel, openViewer, closeViewer, tags, addTagToModel, removeTagFromModel, collections, loadModels, slicers, openInSlicer, openSettings, reportError, aiSettings, aiProgress, enrichModels, applySuggestedTags, setSearchQuery, bedSize } = useStore();
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const [isRenaming, setIsRenaming] = useState(false);
@@ -40,6 +41,7 @@ export default function ModelViewer() {
     const [showGrid, setShowGrid] = useState(true);
     const [display, setDisplay] = useState<ViewerDisplayOptions>({ wireframe: false, fileColors: true, uniformColor: '#3b82f6', clipHeight: 1 });
     const [showClip, setShowClip] = useState(false);
+    const [similar, setSimilar] = useState<ModelWithTags[]>([]);
     const updateDisplay = (patch: Partial<ViewerDisplayOptions>) => setDisplay((current) => ({ ...current, ...patch }));
 
     const modelId = selectedModel?.id;
@@ -59,6 +61,15 @@ export default function ModelViewer() {
             void window.electronAPI.getModelReadme(modelId).then(setReadme);
         }
     }, [modelId, selectedModel?.hasReadme]);
+
+    useEffect(() => {
+        if (!modelId) { setSimilar([]); return; }
+        let cancelled = false;
+        window.electronAPI.findSimilar(modelId, 8)
+            .then((results) => { if (!cancelled) setSimilar(results); })
+            .catch(() => { if (!cancelled) setSimilar([]); });
+        return () => { cancelled = true; };
+    }, [modelId]);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -490,6 +501,24 @@ export default function ModelViewer() {
                                     </div>
                                 )}
                             </section>
+
+                            {similar.length > 0 && (
+                                <section>
+                                    <h3 className="text-sm font-semibold mb-3 text-text-primary flex items-center gap-2"><Sparkles size={14} className="text-accent-blue" /> Similar models</h3>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {similar.map((m) => (
+                                            <button key={m.id} onClick={() => openViewer(m)} className="flex items-center gap-2 p-2 bg-primary-bg rounded-lg border border-accent-gray hover:border-accent-blue text-left min-w-0">
+                                                {thumbnailUrl(m) ? (
+                                                    <img src={thumbnailUrl(m)!} alt="" className="w-10 h-10 rounded object-cover bg-primary-card flex-shrink-0" />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded bg-primary-card flex items-center justify-center flex-shrink-0"><Box size={16} className="text-text-secondary" /></div>
+                                                )}
+                                                <span className="text-xs text-text-primary truncate">{m.displayName || m.filename}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
 
                             {/* README */}
                             {selectedModel.hasReadme && (
