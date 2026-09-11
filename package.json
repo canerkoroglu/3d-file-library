@@ -24,7 +24,7 @@
     "3d",
     "viewer"
   ],
-  "author": "",
+  "author": "Caner Köroğlu",
   "license": "MIT",
   "dependencies": {
     "@react-three/drei": "^10.7.7",
