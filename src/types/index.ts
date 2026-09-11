@@ -135,8 +135,18 @@ export interface DuplicateGroup {
     totalSize: number;
 }
 
+/** Models with matching geometry (triangle count + bounding box) but different bytes. */
+export interface NearDuplicateGroup {
+    /** Geometry signature the group was keyed on (triangle count + rounded dimensions). */
+    signature: string;
+    models: Model[];
+    totalSize: number;
+}
+
 export interface DuplicateReport {
     groups: DuplicateGroup[];
+    /** Same shape, different files — typically one model re-exported into another format/container. */
+    nearDuplicateGroups: NearDuplicateGroup[];
     totalWasted: number;
     groupCount: number;
     /** Files whose hash has not been computed yet, so they could not be compared. */

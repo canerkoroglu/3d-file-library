@@ -775,6 +775,13 @@ export function listTagNames(): string[] {
 
 // ============ Duplicates ============
 
+/** A discrete key for near-duplicate grouping: exact triangle count + bbox rounded to 0.1 units. */
+function geometrySignature(model: Model): string | null {
+    if (!model.triangleCount || !model.bbox) return null;
+    const r = (n: number) => Math.round(n * 10) / 10;
+    return `${model.triangleCount}:${r(model.bbox.x)}:${r(model.bbox.y)}:${r(model.bbox.z)}`;
+}
+
 export function findDuplicates(): DuplicateReport {
     const db = getDatabase();
     const hashes = db.prepare(`
@@ -797,5 +804,24 @@ export function findDuplicates(): DuplicateReport {
     const totalWasted = groups.reduce((sum, g) => sum + (g.models.length - 1) * g.models[0].fileSize, 0);
     const unhashed = db.prepare('SELECT COUNT(*) AS count FROM models WHERE content_hash IS NULL AND missing_since IS NULL').get() as { count: number };
 
-    return { groups, totalWasted, groupCount: groups.length, unhashedCount: unhashed.count };
+    // Near-duplicates: identical geometry but different bytes (e.g. the same model re-exported to
+    // another format or container). Group by geometry signature; keep groups spanning >1 hash.
+    const geomRows = db.prepare(
+        `SELECT ${MODEL_COLUMNS} FROM models m WHERE m.triangle_count IS NOT NULL AND m.triangle_count > 0 AND m.missing_since IS NULL`,
+    ).all() as ModelRow[];
+    const bySignature = new Map<string, Model[]>();
+    for (const row of geomRows) {
+        const model = rowToModel(row);
+        const signature = geometrySignature(model);
+        if (!signature) continue;
+        const list = bySignature.get(signature);
+        if (list) list.push(model);
+        else bySignature.set(signature, [model]);
+    }
+    const nearDuplicateGroups = [...bySignature.entries()]
+        .filter(([, models]) => models.length > 1 && new Set(models.map((m) => m.contentHash)).size > 1)
+        .map(([signature, models]) => ({ signature, models, totalSize: models.reduce((sum, m) => sum + m.fileSize, 0) }))
+        .sort((a, b) => b.totalSize - a.totalSize);
+
+    return { groups, nearDuplicateGroups, totalWasted, groupCount: groups.length, unhashedCount: unhashed.count };
 }

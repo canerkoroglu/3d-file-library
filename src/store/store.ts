@@ -6,6 +6,7 @@ import type {
     AiSettingsUpdate,
     Collection,
     DuplicateGroup,
+    NearDuplicateGroup,
     FilterOptions,
     IndexProgress,
     LibraryStats,
@@ -85,6 +86,7 @@ interface AppState {
     isSettingsOpen: boolean;
     isDuplicatesModalOpen: boolean;
     duplicateGroups: DuplicateGroup[];
+    nearDuplicateGroups: NearDuplicateGroup[];
     wastedSpace: { totalWasted: number; groupCount: number; unhashedCount: number } | null;
     selectedModels: Set<number>;
     /** True while the user is in selection mode (checkboxes shown, clicks toggle instead of opening). */
@@ -212,6 +214,7 @@ export const useStore = create<AppState>((set, get) => ({
     isSettingsOpen: false,
     isDuplicatesModalOpen: false,
     duplicateGroups: [],
+    nearDuplicateGroups: [],
     wastedSpace: null,
     selectedModels: new Set<number>(),
     selectionMode: false,
@@ -359,7 +362,7 @@ export const useStore = create<AppState>((set, get) => ({
     openSettings: () => set({ isSettingsOpen: true }),
     closeSettings: () => set({ isSettingsOpen: false }),
     openDuplicatesModal: () => set({ isDuplicatesModalOpen: true }),
-    closeDuplicatesModal: () => set({ isDuplicatesModalOpen: false, duplicateGroups: [], wastedSpace: null }),
+    closeDuplicatesModal: () => set({ isDuplicatesModalOpen: false, duplicateGroups: [], nearDuplicateGroups: [], wastedSpace: null }),
     setIndexProgress: (progress) => set({ indexProgress: progress }),
     openImportZip: (zipPaths) =>
         set((state) => ({
@@ -539,6 +542,7 @@ export const useStore = create<AppState>((set, get) => ({
             const report = await window.electronAPI.findDuplicates();
             set({
                 duplicateGroups: report.groups,
+                nearDuplicateGroups: report.nearDuplicateGroups,
                 wastedSpace: { totalWasted: report.totalWasted, groupCount: report.groupCount, unhashedCount: report.unhashedCount },
             });
         } catch (error) {
