@@ -48,6 +48,8 @@ const electronAPI: ElectronAPI = {
     // Utilities
     openFolder: (filePath) => ipcRenderer.invoke('open-folder', filePath),
     findDuplicates: () => ipcRenderer.invoke('find-duplicates'),
+    getBedSize: () => ipcRenderer.invoke('get-bed-size'),
+    setBedSize: (bed) => ipcRenderer.invoke('set-bed-size', bed),
     updateModelMetadata: (modelId, metadata) => ipcRenderer.invoke('update-model-metadata', modelId, metadata),
     readFileAsBuffer: (filepath) => ipcRenderer.invoke('read-file-as-buffer', filepath),
     captureThumbnail: (modelId, imageData) => ipcRenderer.invoke('capture-thumbnail', modelId, imageData),

@@ -27,11 +27,12 @@ import { dequeueModel, enqueueAll, enqueueModel, getProgress } from './indexer';
 import { cancelThumbnailRender, requestThumbnailRender, saveThumbnailFromBase64 } from './thumbnails';
 import { addCustomSlicer, listSlicers, openInSlicer, removeCustomSlicer, setDefaultSlicer } from './slicers';
 import { importZipFiles } from './zipImport';
+import { getSetting, setSetting } from './settings';
 import { APP_VERSION, checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, isAutoCheckEnabled, setAutoCheckEnabled } from './updater';
 import { chatJson, getAiConfig, getAiSettings, testConnection, updateAiSettings } from './ai/provider';
 import { buildTranslationMessages, parseTranslation } from './ai/prompts';
 import { cancelEnrichment, enqueueEnrichment, getEnrichmentProgress } from './ai/enrichment';
-import type { AiSettingsUpdate, Collection, EnrichmentTarget, FilterOptions, Model, QueryTranslation, SourceMetadata, Tag, ZipImportRequest } from '../src/types';
+import type { AiSettingsUpdate, BedSize, Collection, EnrichmentTarget, FilterOptions, Model, QueryTranslation, SourceMetadata, Tag, ZipImportRequest } from '../src/types';
 
 type Handler<T> = (event: IpcMainInvokeEvent, ...args: any[]) => Promise<T> | T;
 
@@ -273,6 +274,19 @@ export function setupIpcHandlers(): void {
     // ============ Duplicates ============
 
     handle('find-duplicates', () => findDuplicates());
+
+    // ============ Printer bed ============
+
+    handle('get-bed-size', () => getSetting<BedSize | null>('printer.bed', null));
+    handle('set-bed-size', (_event, bed: BedSize | null): BedSize | null => {
+        if (bed && [bed.x, bed.y, bed.z].every((n) => typeof n === 'number' && Number.isFinite(n) && n > 0)) {
+            const clean = { x: bed.x, y: bed.y, z: bed.z };
+            setSetting('printer.bed', clean);
+            return clean;
+        }
+        setSetting('printer.bed', null);
+        return null;
+    });
 
     // ============ Slicers & shell ============
 

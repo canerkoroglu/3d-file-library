@@ -6,7 +6,7 @@ import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus, Pencil, FileText
 import { useStore } from '../store/store';
 import GenericModel, { type ViewerDisplayOptions } from './GenericModel';
 import MetadataEditor from './MetadataEditor';
-import { formatDimensions, formatFileSize, formatTriangles, formatVolume } from '../lib/format';
+import { exceedsBed, formatDimensions, formatFileSize, formatTriangles, formatVolume } from '../lib/format';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -18,7 +18,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function ModelViewer() {
-    const { selectedModel, closeViewer, tags, addTagToModel, removeTagFromModel, collections, loadModels, slicers, openInSlicer, openSettings, reportError, aiSettings, aiProgress, enrichModels, applySuggestedTags, setSearchQuery } = useStore();
+    const { selectedModel, closeViewer, tags, addTagToModel, removeTagFromModel, collections, loadModels, slicers, openInSlicer, openSettings, reportError, aiSettings, aiProgress, enrichModels, applySuggestedTags, setSearchQuery, bedSize } = useStore();
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const [isRenaming, setIsRenaming] = useState(false);
@@ -351,6 +351,11 @@ export default function ModelViewer() {
                                         {selectedModel.triangleCount !== undefined && <Field label="Triangles">{selectedModel.triangleCount.toLocaleString()}</Field>}
                                         {selectedModel.volumeMm3 !== undefined && <Field label="Volume">{formatVolume(selectedModel.volumeMm3)}</Field>}
                                     </div>
+                                    {exceedsBed(selectedModel, bedSize) && (
+                                        <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-400">
+                                            <AlertTriangle size={14} /> Larger than your printer bed ({bedSize!.x} × {bedSize!.y} × {bedSize!.z} mm)
+                                        </p>
+                                    )}
                                 </section>
                             )}
 

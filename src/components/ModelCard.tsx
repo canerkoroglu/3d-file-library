@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Box, Files, FileText, FileX, Check } from 'lucide-react';
+import { Box, Files, FileText, FileX, Check, AlertTriangle } from 'lucide-react';
 import type { ModelWithTags } from '../types';
 import { useStore } from '../store/store';
-import { formatDimensions, formatFileSize, formatTriangles, thumbnailUrl } from '../lib/format';
+import { exceedsBed, formatDimensions, formatFileSize, formatTriangles, thumbnailUrl } from '../lib/format';
 
 interface ModelCardProps {
     model: ModelWithTags;
@@ -15,12 +15,13 @@ interface ModelCardProps {
 }
 
 export default function ModelCard({ model, viewMode, index, selected, selectionActive }: ModelCardProps) {
-    const { openViewer, toggleModelSelection, selectRangeTo } = useStore();
+    const { openViewer, toggleModelSelection, selectRangeTo, bedSize } = useStore();
     const [imgError, setImgError] = useState(false);
     const src = thumbnailUrl(model) ?? undefined;
     const showImage = Boolean(src) && !imgError;
     const missing = Boolean(model.missingSince);
     const missingTitle = missing ? `File not found since ${new Date(model.missingSince!).toLocaleString()}` : undefined;
+    const oversized = exceedsBed(model, bedSize);
 
     const icon = model.fileType === '3mf'
         ? <Files size={48} className="text-text-secondary" strokeWidth={1.5} />
@@ -99,6 +100,11 @@ export default function ModelCard({ model, viewMode, index, selected, selectionA
                             <FileX size={12} /> Missing
                         </span>
                     )}
+                    {oversized && (
+                        <span className="flex items-center gap-1 text-amber-400 font-medium" title="Larger than your printer bed">
+                            <AlertTriangle size={12} /> Exceeds bed
+                        </span>
+                    )}
                     {model.bbox && <span className="hidden lg:inline">{formatDimensions(model.bbox)}</span>}
                     {model.triangleCount !== undefined && <span className="hidden xl:inline">{formatTriangles(model.triangleCount)}</span>}
                     <span>{formatFileSize(model.fileSize)}</span>
@@ -119,9 +125,18 @@ export default function ModelCard({ model, viewMode, index, selected, selectionA
             title={missingTitle}
         >
             <div className="thumbnail relative">
-                {missing && (
-                    <div className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-red-500/85 backdrop-blur-sm rounded text-[10px] font-bold text-white uppercase flex items-center gap-1">
-                        <FileX size={10} /> Missing
+                {(missing || oversized) && (
+                    <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
+                        {missing && (
+                            <div className="px-2 py-0.5 bg-red-500/85 backdrop-blur-sm rounded text-[10px] font-bold text-white uppercase flex items-center gap-1">
+                                <FileX size={10} /> Missing
+                            </div>
+                        )}
+                        {oversized && (
+                            <div className="px-2 py-0.5 bg-amber-500/85 backdrop-blur-sm rounded text-[10px] font-bold text-white uppercase flex items-center gap-1" title="Larger than your printer bed">
+                                <AlertTriangle size={10} /> Exceeds bed
+                            </div>
+                        )}
                     </div>
                 )}
                 <div className="absolute top-2 right-2 z-10">{checkbox}</div>

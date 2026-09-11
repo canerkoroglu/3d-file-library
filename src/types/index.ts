@@ -153,6 +153,13 @@ export interface DuplicateReport {
     unhashedCount: number;
 }
 
+/** Printer build volume in millimetres, used to flag models that won't fit. */
+export interface BedSize {
+    x: number;
+    y: number;
+    z: number;
+}
+
 export interface ZipImportRequest {
     zipPaths: string[];
     /** Watched folder the archives are extracted into. */
@@ -324,6 +331,8 @@ export interface ElectronAPI {
     // Utility operations
     openFolder: (path: string) => Promise<void>;
     findDuplicates: () => Promise<DuplicateReport>;
+    getBedSize: () => Promise<BedSize | null>;
+    setBedSize: (bed: BedSize | null) => Promise<BedSize | null>;
     updateModelMetadata: (modelId: number, metadata: SourceMetadata) => Promise<void>;
     readFileAsBuffer: (filepath: string) => Promise<ArrayBuffer>;
     captureThumbnail: (modelId: number, imageData: string) => Promise<void>;

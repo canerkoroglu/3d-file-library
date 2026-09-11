@@ -1,4 +1,19 @@
-import type { BoundingBox, Model } from '../types';
+import type { BedSize, BoundingBox, Model } from '../types';
+
+/** Formats stored in millimetres, so a bed-size comparison is meaningful. */
+const MM_FILE_TYPES = new Set(['stl', '3mf', 'obj', 'step']);
+
+/**
+ * True when the model cannot fit the printer bed in any axis-aligned orientation: sort both the
+ * model's dimensions and the bed's and require each model dimension to fit the matching bed one.
+ * Only checked for millimetre formats (glTF/USDZ units are model-defined, so they're skipped).
+ */
+export function exceedsBed(model: Pick<Model, 'bbox' | 'fileType'>, bed: BedSize | null): boolean {
+    if (!bed || !model.bbox || !MM_FILE_TYPES.has(model.fileType)) return false;
+    const m = [model.bbox.x, model.bbox.y, model.bbox.z].sort((a, b) => a - b);
+    const b = [bed.x, bed.y, bed.z].sort((a, b) => a - b);
+    return m[0] > b[0] || m[1] > b[1] || m[2] > b[2];
+}
 
 export function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;

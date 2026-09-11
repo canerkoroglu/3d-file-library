@@ -7,6 +7,7 @@ import type {
     Collection,
     DuplicateGroup,
     NearDuplicateGroup,
+    BedSize,
     FilterOptions,
     IndexProgress,
     LibraryStats,
@@ -103,6 +104,7 @@ interface AppState {
     dismissedUpdateVersion: string | null;
     toasts: Toast[];
     aiSettings: AiSettings | null;
+    bedSize: BedSize | null;
     aiProgress: AiProgress | null;
     /** Result of the last natural-language search, shown under the search box. */
     lastTranslation: QueryTranslation | null;
@@ -112,6 +114,8 @@ interface AppState {
     // AI assistant
     loadAiSettings: () => Promise<void>;
     updateAiSettings: (update: AiSettingsUpdate) => Promise<void>;
+    loadBedSize: () => Promise<void>;
+    updateBedSize: (bed: BedSize | null) => Promise<void>;
     setAiProgress: (progress: AiProgress | null) => void;
     /** Turns a plain-language request into a search and applies it. */
     askSearch: (text: string) => Promise<void>;
@@ -228,6 +232,7 @@ export const useStore = create<AppState>((set, get) => ({
     dismissedUpdateVersion: null,
     toasts: [],
     aiSettings: null,
+    bedSize: null,
     aiProgress: null,
     lastTranslation: null,
     isTranslating: false,
@@ -245,6 +250,20 @@ export const useStore = create<AppState>((set, get) => ({
             set({ aiSettings: await window.electronAPI.updateAiSettings(update) });
         } catch (error) {
             get().reportError('Could not save the AI settings', error);
+        }
+    },
+    loadBedSize: async () => {
+        try {
+            set({ bedSize: await window.electronAPI.getBedSize() });
+        } catch (error) {
+            get().reportError('Could not load the printer bed size', error);
+        }
+    },
+    updateBedSize: async (bed) => {
+        try {
+            set({ bedSize: await window.electronAPI.setBedSize(bed) });
+        } catch (error) {
+            get().reportError('Could not save the printer bed size', error);
         }
     },
     setAiProgress: (progress) => set({ aiProgress: progress }),

@@ -3,6 +3,7 @@ import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw
 import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 import AiSettingsSection from './AiSettingsSection';
+import PrinterBedSection from './PrinterBedSection';
 
 export default function SettingsModal() {
     const { closeSettings, theme, setTheme, indexProgress, libraryStats, loadModels, slicers, loadSlicers, setDefaultSlicer, addCustomSlicer, removeCustomSlicer, updateStatus, checkForUpdates, downloadUpdate, installUpdate, reportError, pushToast } = useStore();
@@ -149,6 +150,8 @@ export default function SettingsModal() {
                     </section>
 
                     <AiSettingsSection />
+
+                    <PrinterBedSection />
 
                     <section className="space-y-4">
                         <h3 className="text-sm font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
