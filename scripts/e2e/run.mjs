@@ -20,7 +20,10 @@ const noBuild = args.includes('--no-build');
 const filterIndex = args.indexOf('--filter');
 const filter = filterIndex >= 0 ? args[filterIndex + 1] : null;
 const keep = args.includes('--keep');
-const SCENARIO_TIMEOUT_MS = 180_000;
+// Safety net for a truly stuck scenario. Must exceed the sum of a scenario's own internal
+// waits (the import scenario waits 90s for imports + 180s for indexing/rendering) so a cold,
+// under-load run isn't killed mid-wait.
+const SCENARIO_TIMEOUT_MS = 300_000;
 
 function step(message) {
     console.log(`\n▶ ${message}`);
