@@ -15,6 +15,16 @@ export function exceedsBed(model: Pick<Model, 'bbox' | 'fileType'>, bed: BedSize
     return m[0] > b[0] || m[1] > b[1] || m[2] > b[2];
 }
 
+/** Returns the URL only if it is http(s), so a rendered link can never be a javascript:/data: URL. */
+export function httpUrl(url: string): string | null {
+    try {
+        const { protocol } = new URL(url);
+        return protocol === 'http:' || protocol === 'https:' ? url : null;
+    } catch {
+        return null;
+    }
+}
+
 export function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

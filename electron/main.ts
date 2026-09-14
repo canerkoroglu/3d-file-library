@@ -1,4 +1,4 @@
-import { app, BrowserWindow, net, protocol } from 'electron';
+import { app, BrowserWindow, net, protocol, shell } from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { closeDatabase, getDatabase, initDatabase } from './database';
@@ -52,6 +52,16 @@ function createWindow(): void {
             contextIsolation: true,
             nodeIntegration: false,
         },
+    });
+
+    // Defense-in-depth: the app is a single local page, so open external links in the OS
+    // browser and refuse to open new windows or navigate the window away from the app itself.
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+        return { action: 'deny' };
+    });
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        if (!url.startsWith('file://') && url !== process.env.VITE_DEV_SERVER_URL) event.preventDefault();
     });
 
     if (process.env.VITE_DEV_SERVER_URL) {

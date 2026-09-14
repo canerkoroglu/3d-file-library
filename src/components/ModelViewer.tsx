@@ -6,7 +6,7 @@ import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus, Pencil, FileText
 import { useStore } from '../store/store';
 import GenericModel, { type ViewerDisplayOptions } from './GenericModel';
 import MetadataEditor from './MetadataEditor';
-import { exceedsBed, formatDimensions, formatFileSize, formatTriangles, formatVolume, thumbnailUrl } from '../lib/format';
+import { exceedsBed, formatDimensions, formatFileSize, formatTriangles, formatVolume, httpUrl, thumbnailUrl } from '../lib/format';
 import type { ModelWithTags } from '../types';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -405,7 +405,9 @@ export default function ModelViewer() {
                                         </div>
                                         {meta.url && (
                                             <Field label="URL">
-                                                <a href={meta.url} target="_blank" rel="noreferrer" className="text-accent-blue hover:underline text-xs break-all">{meta.url}</a>
+                                                {httpUrl(meta.url)
+                                                    ? <a href={meta.url} target="_blank" rel="noreferrer" className="text-accent-blue hover:underline text-xs break-all">{meta.url}</a>
+                                                    : <span className="text-xs break-all">{meta.url}</span>}
                                             </Field>
                                         )}
                                         {meta.notes && <Field label="Notes"><span className="text-xs whitespace-pre-wrap">{meta.notes}</span></Field>}
