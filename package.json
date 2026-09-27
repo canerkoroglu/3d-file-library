@@ -1,6 +1,6 @@
 {
   "name": "stl-viewer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Modelist-inspired 3D file organizer",
   "main": "dist-electron/main.js",
