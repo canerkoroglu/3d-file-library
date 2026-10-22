@@ -1,7 +1,8 @@
 name: Release
 
-# Builds installers for every platform when a version tag is pushed and uploads them
-# to a draft GitHub release. Publish the draft to make it visible to the in-app updater.
+# On a version tag, each OS builds its own installers with NO publishing (so a
+# per-platform publish failure can't sink the release), uploads them as artifacts,
+# then a single job collects everything into one draft GitHub release.
 on:
   push:
     tags: ['v*']
@@ -10,18 +11,14 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
     strategy:
       fail-fast: false
-      # Publish one platform at a time: concurrent electron-builder jobs racing to create the
-      # same draft GitHub release can fail (the first creates it, the others collide).
-      max-parallel: 1
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # No signing certificates in CI; macOS builds are unsigned and cannot self-update (see README).
+      # No signing certificates in CI; builds are unsigned.
       CSC_IDENTITY_AUTO_DISCOVERY: false
     steps:
       - uses: actions/checkout@v4
@@ -33,4 +30,34 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npx vite build
-      - run: npx electron-builder --publish always
+      - run: npx electron-builder --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.AppImage
+            release/latest*.yml
+            release/*.blockmap
+          if-no-files-found: ignore
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+          pattern: installers-*
+          merge-multiple: true
+      - name: Create or update the draft release and upload installers
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
+            --title "Modelist $GITHUB_REF_NAME" --generate-notes \
+            || echo "Release already exists; uploading assets to it."
+          gh release upload "$GITHUB_REF_NAME" dist-artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
