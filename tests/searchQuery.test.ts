@@ -54,10 +54,16 @@ describe('parseSearchQuery', () => {
     });
 
     it('ignores invalid file types and numbers', () => {
-        const q = parseSearchQuery('type:step tris:many');
+        const q = parseSearchQuery('type:fbx tris:many');
         expect(q.fileTypes).toEqual([]);
         expect(q.minTriangles).toBeUndefined();
         expect(q.maxTriangles).toBeUndefined();
+    });
+
+    it('accepts every supported file type', () => {
+        expect(parseSearchQuery('type:glb').fileTypes).toEqual(['glb']);
+        expect(parseSearchQuery('type:usdz').fileTypes).toEqual(['usdz']);
+        expect(parseSearchQuery('type:step').fileTypes).toEqual(['step']);
     });
 });
 

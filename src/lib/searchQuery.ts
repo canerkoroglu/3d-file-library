@@ -3,7 +3,7 @@
  *
  * Supported operators (case-insensitive, values may be quoted):
  *   tag:printed           model has the tag (repeatable, all must match)
- *   type:stl|3mf|obj      file type (repeatable, any may match)
+ *   type:stl|3mf|obj|glb|usdz|step   file type (repeatable, any may match)
  *   source:printables     source site from metadata
  *   author:name           author from metadata
  *   license:cc-by         license from metadata
@@ -179,7 +179,7 @@ export function parseSearchQuery(raw: string, options: { now?: Date } = {}): Par
                 break;
             case 'type': {
                 const type = value.toLowerCase().replace(/^\./, '');
-                if (['stl', '3mf', 'obj'].includes(type)) result.fileTypes.push(type);
+                if (['stl', '3mf', 'obj', 'glb', 'usdz', 'step'].includes(type)) result.fileTypes.push(type);
                 break;
             }
             case 'source':

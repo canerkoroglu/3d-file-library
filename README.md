@@ -1,20 +1,22 @@
 # Modelist
 
-A desktop library for 3D printing files (STL, 3MF, OBJ). Point it at the folders where you keep your models and it keeps a searchable, thumbnailed catalogue of everything in them.
+A desktop library for 3D files (STL, OBJ, 3MF, GLB/glTF, USDZ and STEP). Point it at the folders where you keep your models and it keeps a searchable, thumbnailed catalogue of everything in them.
 
 ## Features
 
 - **Watched folders**: add a folder and every model inside it is imported and kept in sync as files change. Files that disappear (deleted, moved, or on an unplugged drive) are flagged as missing rather than removed, so their tags, notes and collections survive; they are restored automatically when they come back, and can be forgotten from Settings.
-- **Background indexing**: each file is hashed and measured in a separate worker process. Triangle count, bounding box (mm) and volume are extracted from STL, OBJ and 3MF files; 3MF project files also yield the title, designer, slicer, printer, filament and layer height.
+- **Formats**: STL, OBJ, 3MF (including slicer project files and Bambu/Orca/Prusa 3MFs whose geometry is split across parts), GLB/glTF, USDZ and STEP — STEP (CAD) is tessellated on load. All render in the 3D viewer and get thumbnails.
+- **Background indexing**: each file is hashed and measured in a separate worker process. Triangle count, bounding box (mm) and volume are extracted from STL, OBJ and 3MF files, and triangle count and bounding box from GLB/glTF; 3MF project files also yield the title, designer, slicer, printer, filament and layer height. STEP and USDZ render but their geometry stats are not yet indexed.
 - **Sidecar awareness**: a README, LICENSE or preview image sitting next to a model (including the `files/` + `images/` layout of Thingiverse and Printables downloads) is indexed and used for the thumbnail.
 - **Thumbnails**: embedded 3MF previews, sidecar images, or a 3D render produced in the background. You can also capture your own view from the viewer.
 - **Full-text search**: an SQLite FTS5 trigram index over names, folder paths, tags, notes, source metadata, slicer settings and README text, with a small query language (below).
 - **Organization**: many-to-many collections, colour-coded tags, source metadata (site, author, license, URL, notes).
 - **ZIP import**: drop a Thingiverse, Printables or MyMiniFactory download on the window (or use *Import ZIP…* in the sidebar) and it is extracted into a watched folder, one sub-folder per archive, so the README, license and preview images are indexed with the models. Links to the model page found in a README fill in the source and URL automatically. Dropping STL, 3MF or OBJ files registers them in place.
-- **Duplicate finder**: exact duplicates are detected from stored content hashes without rescanning your disk.
-- **3D viewer**: orbit, zoom and pan with Z-up orientation matching your slicer. Toolbar with auto-rotate (Space), wireframe (W), grid (G), reset view (R), a section-height slider that cuts the model open, a model colour picker, and file colours for 3MF projects.
+- **Duplicate finder**: exact duplicates (identical bytes) and near-duplicates — same geometry (triangle count and bounding box) but different files, such as the same model re-exported — are found from the stored index without rescanning your disk.
+- **Printer fit check**: set your printer's build volume in Settings and any model that will not fit in any orientation is flagged *Exceeds bed* on its card and in the viewer (millimetre formats: STL, OBJ, 3MF, STEP).
+- **3D viewer**: renders every supported format (STEP is tessellated on load); orbit, zoom and pan with Z-up orientation matching your slicer. Toolbar with auto-rotate (Space), wireframe (W), grid (G), reset view (R), a section-height slider that cuts the model open, a model colour picker, and file colours for 3MF projects.
 - **Bulk actions**: hover a card for its checkbox, ⌘/Ctrl-click to toggle, Shift-click for ranges, ⌘/Ctrl+A for everything loaded, then add or remove tags, add to a collection or remove from the library in one go.
-- **AI assistant (optional, local)**: point the app at any OpenAI-compatible server (Ollama or LM Studio on your machine, or a remote host) and pick a model such as Qwen3. The assistant writes a one-line description, a category, search keywords and tag suggestions for each model, all of which become searchable, and turns plain-language questions ("small printed dragons from last month") into the search syntax. Nothing is sent anywhere but the server you configure.
+- **AI assistant (optional, local)**: point the app at any OpenAI-compatible server (Ollama or LM Studio on your machine, or a remote host) and pick a model such as Qwen3 or Gemma. The assistant writes a one-line description, a category, bilingual search keywords and tag suggestions for each model, all of which become searchable, and turns plain-language questions ("small printed dragons from last month", in English or Turkish) into the search syntax. With an embedding model it also builds a semantic index for **Similar models** suggestions. Nothing is sent anywhere but the server you configure.
 - **Slicer integration**: installed slicers (Bambu Studio, OrcaSlicer, PrusaSlicer, SuperSlicer, Cura, ideaMaker, Lychee, CHITUBOX and more) are detected on macOS, Windows and Linux. Pick a default in Settings or choose per model from the viewer; anything the scan misses can be added by hand.
 - **Cross-platform**: macOS, Windows and Linux builds.
 
@@ -27,7 +29,7 @@ Type plain words to search everything. Add operators to narrow down:
 | `benchy hull` | words must all appear somewhere (name, folder, tags, notes, README, …) |
 | `"low poly"` | exact phrase |
 | `tag:printed` | has the tag (repeat to require several) |
-| `type:3mf` | file type: `stl`, `3mf` or `obj` |
+| `type:3mf` | file type: `stl`, `3mf`, `obj`, `glb`, `usdz` or `step` |
 | `source:printables` | source site from metadata |
 | `author:name` | author from metadata or designer from the 3MF |
 | `license:cc-by` | license from metadata or a detected LICENSE / README |
@@ -46,8 +48,11 @@ Settings → AI assistant. Choose a server preset or enter a base URL ending in 
 
 - **Ask**: the sparkle button in the search box takes a plain-language request and applies the translated query, showing what it understood so you can adjust it.
 - **Analyse**: from the viewer, the bulk action bar, or *Settings → Analyse models without a description*. Turn on *Analyse new models automatically* to process imports as they arrive. Results appear in the viewer's AI section; `category:` searches use them.
+- **Similar models**: set an *Embedding model* (for example `nomic-embed-text`) and click *Build semantic index*; the viewer then suggests similar models by meaning and shape. It works on filenames alone but is far better after Analyse has described your library.
 
 Ollama is detected automatically and driven through its native API with model "thinking" switched off, because reasoning models otherwise spend their whole answer on it. Other servers get the OpenAI-compatible API with `enable_thinking: false`; if a server cannot switch thinking off, use a non-reasoning model. The API key is stored encrypted with the operating system's keychain facilities where available.
+
+To host the server on a GPU box, `deploy/ai/` contains a Docker Compose stack (Ollama) that serves both the chat and the embedding model — see [deploy/ai/README.md](deploy/ai/README.md).
 
 ## Tech stack
 
@@ -104,12 +109,13 @@ electron/
   ai/provider.ts       OpenAI-compatible / Ollama client, settings, key storage
   ai/prompts.ts        prompt construction and reply validation
   ai/enrichment.ts     background queue that describes models
+  ai/vector.ts         text embeddings + the semantic "similar models" index
   slicers.ts           slicer discovery per platform and launching
   zipImport.ts         safe extraction of downloaded archives into a watched folder
   settings.ts          key/value preferences stored in the database
   indexer/index.ts     job queue feeding the worker process
   indexer/worker.ts    utility process: hashing, mesh stats, sidecars, images
-  analyzers/           STL / OBJ / 3MF parsers, sidecar discovery
+  analyzers/           STL / OBJ / 3MF / glTF parsers, sidecar discovery
 src/
   components/          React UI (virtualised grid, viewer, sidebar, modals)
   store/store.ts       Zustand state
@@ -117,6 +123,7 @@ src/
   thumbnails/          off-screen Three.js thumbnail renderer
 tests/                 vitest unit tests
 scripts/e2e/           end-to-end runner, fixtures and scenarios
+deploy/ai/             Docker Compose (Ollama) GPU stack for the AI backend
 ```
 
 ## How data flows
