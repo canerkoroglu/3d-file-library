@@ -119,12 +119,15 @@ export function updateAiSettings(update: AiSettingsUpdate): AiSettings {
 function resolveConfig(override?: AiSettingsUpdate): AiConfig {
     const config = getAiConfig();
     if (!override) return config;
+    const baseUrl = override.baseUrl !== undefined ? normaliseBaseUrl(override.baseUrl) || AI_DEFAULTS.baseUrl : config.baseUrl;
+    // The saved key belongs to the saved server: never send it to a different, unsaved address.
+    const savedKey = baseUrl === config.baseUrl ? config.apiKey : null;
     return {
         ...config,
-        baseUrl: override.baseUrl !== undefined ? normaliseBaseUrl(override.baseUrl) || AI_DEFAULTS.baseUrl : config.baseUrl,
+        baseUrl,
         model: override.model !== undefined ? override.model.trim() || config.model : config.model,
         embeddingModel: override.embeddingModel !== undefined ? override.embeddingModel.trim() : config.embeddingModel,
-        apiKey: override.apiKey === null ? null : typeof override.apiKey === 'string' && override.apiKey.trim() ? override.apiKey.trim() : config.apiKey,
+        apiKey: override.apiKey === null ? null : typeof override.apiKey === 'string' && override.apiKey.trim() ? override.apiKey.trim() : savedKey,
         timeoutMs: override.timeoutMs ?? config.timeoutMs,
     };
 }

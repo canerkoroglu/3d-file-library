@@ -136,12 +136,16 @@ function hydrate(models: Model[]): ModelWithTags[] {
     if (models.length === 0) return [];
     const db = getDatabase();
 
+    // Only fetch links for the models being returned (a page is ~100 rows; the library may hold tens of thousands).
+    const ids = JSON.stringify(models.map((m) => m.id));
+
     const tagsByModel = new Map<number, Tag[]>();
     const tagRows = db.prepare(`
         SELECT mt.model_id, t.id, t.name, t.color
         FROM model_tags mt JOIN tags t ON t.id = mt.tag_id
+        WHERE mt.model_id IN (SELECT value FROM json_each(?))
         ORDER BY t.name
-    `).all() as Array<{ model_id: number; id: number; name: string; color: string }>;
+    `).all(ids) as Array<{ model_id: number; id: number; name: string; color: string }>;
     for (const row of tagRows) {
         const list = tagsByModel.get(row.model_id) ?? [];
         list.push({ id: row.id, name: row.name, color: row.color });
@@ -149,7 +153,10 @@ function hydrate(models: Model[]): ModelWithTags[] {
     }
 
     const collectionsByModel = new Map<number, number[]>();
-    const collectionRows = db.prepare('SELECT model_id, collection_id FROM model_collections').all() as Array<{ model_id: number; collection_id: number }>;
+    const collectionRows = db.prepare(`
+        SELECT model_id, collection_id FROM model_collections
+        WHERE model_id IN (SELECT value FROM json_each(?))
+    `).all(ids) as Array<{ model_id: number; collection_id: number }>;
     for (const row of collectionRows) {
         const list = collectionsByModel.get(row.model_id) ?? [];
         list.push(row.collection_id);
@@ -438,9 +445,12 @@ export function refreshSearchIndex(modelId: number): void {
 
 export function rebuildSearchIndex(): void {
     const db = getDatabase();
-    db.exec('DELETE FROM models_fts');
-    const ids = db.prepare('SELECT id FROM models').all() as Array<{ id: number }>;
-    for (const { id } of ids) refreshSearchIndex(id);
+    // One transaction for the whole rebuild: per-row commits make large libraries take minutes.
+    db.transaction(() => {
+        db.exec('DELETE FROM models_fts');
+        const ids = db.prepare('SELECT id FROM models').all() as Array<{ id: number }>;
+        for (const { id } of ids) refreshSearchIndex(id);
+    })();
 }
 
 // ============ Imports and removals ============
@@ -661,6 +671,15 @@ export function updateSourceMetadata(modelId: number, metadata: SourceMetadata):
     refreshSearchIndex(modelId);
 }
 
+async function isSameFile(a: string, b: string): Promise<boolean> {
+    try {
+        const [sa, sb] = await Promise.all([fs.promises.stat(a), fs.promises.stat(b)]);
+        return sa.ino === sb.ino && sa.dev === sb.dev;
+    } catch {
+        return false;
+    }
+}
+
 export async function renameModelFile(modelId: number, newName: string): Promise<void> {
     const db = getDatabase();
     const model = db.prepare('SELECT filepath FROM models WHERE id = ?').get(modelId) as { filepath: string } | undefined;
@@ -677,9 +696,28 @@ export async function renameModelFile(modelId: number, newName: string): Promise
 
     const newPath = path.join(dir, safeName);
     if (newPath === oldPath) return;
-    if (fs.existsSync(newPath)) throw new Error('A file with that name already exists');
 
-    await fs.promises.rename(oldPath, newPath);
+    // On case-insensitive file systems (Windows, default macOS) "Part.stl" -> "part.stl" points at the
+    // same file, so existsSync() is true. Only reject when the target is genuinely a different file.
+    const caseOnlyChange = newPath.toLowerCase() === oldPath.toLowerCase();
+    if (!caseOnlyChange && fs.existsSync(newPath)) throw new Error('A file with that name already exists');
+    if (caseOnlyChange && fs.existsSync(newPath) && !(await isSameFile(oldPath, newPath))) {
+        throw new Error('A file with that name already exists');
+    }
+
+    if (caseOnlyChange) {
+        // Some file systems ignore a rename that only changes case; go through a temporary name.
+        const temp = path.join(dir, `.${safeName}.${process.pid}.${Date.now()}.renaming`);
+        await fs.promises.rename(oldPath, temp);
+        try {
+            await fs.promises.rename(temp, newPath);
+        } catch (error) {
+            await fs.promises.rename(temp, oldPath).catch(() => undefined);
+            throw error;
+        }
+    } else {
+        await fs.promises.rename(oldPath, newPath);
+    }
     db.prepare('UPDATE models SET filename = ?, filepath = ?, modified_at = ? WHERE id = ?')
         .run(safeName, newPath, new Date().toISOString(), modelId);
     refreshSearchIndex(modelId);
@@ -854,15 +892,18 @@ export function setEmbedding(modelId: number, model: string, vector: number[]): 
 /** Returns the available models most similar to the given one, by cosine of their embeddings. */
 export function findSimilar(modelId: number, limit = 12): ModelWithTags[] {
     const db = getDatabase();
-    const target = db.prepare('SELECT vector FROM model_embeddings WHERE model_id = ?').get(modelId) as { vector: Buffer } | undefined;
+    const target = db.prepare('SELECT vector, model, dims FROM model_embeddings WHERE model_id = ?').get(modelId) as
+        | { vector: Buffer; model: string; dims: number }
+        | undefined;
     if (!target) return [];
     const targetVector = deserializeVector(target.vector);
 
+    // Vectors from different embedding models live in different spaces; only compare like with like.
     const rows = db.prepare(`
         SELECT e.model_id AS id, e.vector AS vector
         FROM model_embeddings e JOIN models m ON m.id = e.model_id
-        WHERE m.missing_since IS NULL AND e.model_id != ?
-    `).all(modelId) as Array<{ id: number; vector: Buffer }>;
+        WHERE m.missing_since IS NULL AND e.model_id != ? AND e.model = ? AND e.dims = ?
+    `).all(modelId, target.model, target.dims) as Array<{ id: number; vector: Buffer }>;
 
     const scored = rows
         .map((row) => ({ id: row.id, score: cosineSimilarity(targetVector, deserializeVector(row.vector)) }))

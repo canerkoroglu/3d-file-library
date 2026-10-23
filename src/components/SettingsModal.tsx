@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw, FileX, ExternalLink, Plus, Trash2, Download, Loader2 } from 'lucide-react';
+import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw, FileX, ExternalLink, Plus, Trash2, Download, Loader2, FileText } from 'lucide-react';
 import { useStore } from '../store/store';
 import { ConfirmDialog } from './ConfirmDialog';
 import AiSettingsSection from './AiSettingsSection';
@@ -286,6 +286,12 @@ export default function SettingsModal() {
                                     className="flex items-center gap-2 px-4 py-2 bg-primary-card hover:bg-primary-hover rounded-lg text-sm text-text-primary transition-colors border border-accent-gray"
                                 >
                                     <Github size={16} /> GitHub
+                                </button>
+                                <button
+                                    onClick={() => window.electronAPI.openLogsFolder().catch((error) => reportError('Could not open the log folder', error))}
+                                    className="flex items-center gap-2 px-4 py-2 bg-primary-card hover:bg-primary-hover rounded-lg text-sm text-text-primary transition-colors border border-accent-gray"
+                                >
+                                    <FileText size={16} /> Open log folder
                                 </button>
                             </div>
                         </div>

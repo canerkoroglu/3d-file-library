@@ -347,6 +347,7 @@ export interface ElectronAPI {
 
     // Utility operations
     openFolder: (path: string) => Promise<void>;
+    openLogsFolder: () => Promise<void>;
     findDuplicates: () => Promise<DuplicateReport>;
     getBedSize: () => Promise<BedSize | null>;
     setBedSize: (bed: BedSize | null) => Promise<BedSize | null>;

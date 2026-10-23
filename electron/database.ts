@@ -260,6 +260,8 @@ export function initDatabase(dbPath: string): Database.Database {
     // Foreign keys stay OFF while migrations run: a migration may rebuild the models table, and
     // DROP TABLE with FKs enabled would cascade-delete tag/collection links. The pragma is a no-op
     // inside a transaction (where each migration runs), so enable it once, after they all finish.
+    // Set explicitly rather than relying on the driver's default.
+    db.pragma('foreign_keys = OFF');
     const currentVersion = db.pragma('user_version', { simple: true }) as number;
     for (const migration of MIGRATIONS) {
         if (migration.version <= currentVersion) continue;

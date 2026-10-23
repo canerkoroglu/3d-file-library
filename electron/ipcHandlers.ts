@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { getDatabase } from './database';
@@ -30,6 +30,8 @@ import { cancelThumbnailRender, requestThumbnailRender, saveThumbnailFromBase64 
 import { addCustomSlicer, listSlicers, openInSlicer, removeCustomSlicer, setDefaultSlicer } from './slicers';
 import { importZipFiles } from './zipImport';
 import { getSetting, setSetting } from './settings';
+import { getLogDir } from './logger';
+import { isInsideDir } from './paths';
 import { buildEmbeddings, cancelEmbeddingBuild } from './ai/embeddings';
 import { APP_VERSION, checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, isAutoCheckEnabled, setAutoCheckEnabled } from './updater';
 import { chatJson, getAiConfig, getAiSettings, testConnection, updateAiSettings } from './ai/provider';
@@ -48,6 +50,26 @@ function handle<T>(channel: string, handler: Handler<T>): void {
             throw error;
         }
     });
+}
+
+// ---- Argument checks: the renderer is trusted code, but a bug there should fail loudly, not corrupt data. ----
+
+function asId(value: unknown, what = 'id'): number {
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error(`Invalid ${what}`);
+    return value;
+}
+
+function asName(value: unknown, what = 'name', maxLength = 200): string {
+    if (typeof value !== 'string') throw new Error(`Invalid ${what}`);
+    const trimmed = value.trim();
+    if (!trimmed) throw new Error(`The ${what} cannot be empty`);
+    if (trimmed.length > maxLength) throw new Error(`The ${what} is too long (max ${maxLength} characters)`);
+    return trimmed;
+}
+
+function asColor(value: unknown): string {
+    if (typeof value !== 'string' || !/^#[0-9a-f]{3,8}$/i.test(value)) throw new Error('Invalid colour');
+    return value;
 }
 
 function windowFor(event: IpcMainInvokeEvent): BrowserWindow | undefined {
@@ -124,15 +146,16 @@ export function setupIpcHandlers(): void {
 
     handle('import-zip', (_event, request: ZipImportRequest) => importZipFiles(request.zipPaths, request.collectionId));
 
-    handle('delete-file', (_event, id: number) => {
+    handle('delete-file', (_event, rawId: unknown) => {
+        const id = asId(rawId, 'model id');
         dequeueModel(id);
         cancelThumbnailRender(id);
         deleteModel(id);
         notifyModelsUpdated();
     });
 
-    handle('rename-model-file', async (_event, id: number, newName: string) => {
-        await renameModelFile(id, newName);
+    handle('rename-model-file', async (_event, id: unknown, newName: unknown) => {
+        await renameModelFile(asId(id, 'model id'), asName(newName, 'file name', 255));
         notifyModelsUpdated();
     });
 
@@ -145,19 +168,25 @@ export function setupIpcHandlers(): void {
 
     handle('get-tags', () => db.prepare('SELECT * FROM tags ORDER BY name').all() as Tag[]);
 
-    handle('create-tag', (_event, name: string, color: string): Tag => {
-        const result = db.prepare('INSERT INTO tags (name, color) VALUES (?, ?)').run(name.trim(), color);
-        return { id: result.lastInsertRowid as number, name: name.trim(), color };
+    handle('create-tag', (_event, rawName: unknown, rawColor: unknown): Tag => {
+        const name = asName(rawName, 'tag name', 60);
+        const color = asColor(rawColor);
+        const existing = db.prepare('SELECT id FROM tags WHERE name = ?').get(name);
+        if (existing) throw new Error(`A tag named "${name}" already exists`);
+        const result = db.prepare('INSERT INTO tags (name, color) VALUES (?, ?)').run(name, color);
+        return { id: result.lastInsertRowid as number, name, color };
     });
 
-    handle('add-tag-to-model', (_event, modelId: number, tagId: number) => {
-        db.prepare('INSERT OR IGNORE INTO model_tags (model_id, tag_id) VALUES (?, ?)').run(modelId, tagId);
-        refreshSearchIndex(modelId);
+    handle('add-tag-to-model', (_event, modelId: unknown, tagId: unknown) => {
+        const id = asId(modelId, 'model id');
+        db.prepare('INSERT OR IGNORE INTO model_tags (model_id, tag_id) VALUES (?, ?)').run(id, asId(tagId, 'tag id'));
+        refreshSearchIndex(id);
     });
 
-    handle('remove-tag-from-model', (_event, modelId: number, tagId: number) => {
-        db.prepare('DELETE FROM model_tags WHERE model_id = ? AND tag_id = ?').run(modelId, tagId);
-        refreshSearchIndex(modelId);
+    handle('remove-tag-from-model', (_event, modelId: unknown, tagId: unknown) => {
+        const id = asId(modelId, 'model id');
+        db.prepare('DELETE FROM model_tags WHERE model_id = ? AND tag_id = ?').run(id, asId(tagId, 'tag id'));
+        refreshSearchIndex(id);
     });
 
     // ============ Collections ============
@@ -176,25 +205,26 @@ export function setupIpcHandlers(): void {
         }));
     });
 
-    handle('create-collection', (_event, name: string): Collection => {
-        const result = db.prepare("INSERT INTO collections (name, type) VALUES (?, 'collection')").run(name.trim());
-        return { id: result.lastInsertRowid as number, name: name.trim(), type: 'collection', isActive: true };
+    handle('create-collection', (_event, rawName: unknown): Collection => {
+        const name = asName(rawName, 'collection name', 100);
+        const result = db.prepare("INSERT INTO collections (name, type) VALUES (?, 'collection')").run(name);
+        return { id: result.lastInsertRowid as number, name, type: 'collection', isActive: true };
     });
 
-    handle('rename-collection', (_event, id: number, newName: string) => {
-        db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(newName.trim(), id);
+    handle('rename-collection', (_event, id: unknown, newName: unknown) => {
+        db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(asName(newName, 'collection name', 100), asId(id, 'collection id'));
     });
 
-    handle('delete-collection', (_event, id: number) => {
-        db.prepare("DELETE FROM collections WHERE id = ? AND type = 'collection'").run(id);
+    handle('delete-collection', (_event, id: unknown) => {
+        db.prepare("DELETE FROM collections WHERE id = ? AND type = 'collection'").run(asId(id, 'collection id'));
     });
 
-    handle('add-model-to-collection', (_event, modelId: number, collectionId: number) => {
-        db.prepare('INSERT OR IGNORE INTO model_collections (model_id, collection_id) VALUES (?, ?)').run(modelId, collectionId);
+    handle('add-model-to-collection', (_event, modelId: unknown, collectionId: unknown) => {
+        db.prepare('INSERT OR IGNORE INTO model_collections (model_id, collection_id) VALUES (?, ?)').run(asId(modelId, 'model id'), asId(collectionId, 'collection id'));
     });
 
-    handle('remove-model-from-collection', (_event, modelId: number, collectionId: number) => {
-        db.prepare('DELETE FROM model_collections WHERE model_id = ? AND collection_id = ?').run(modelId, collectionId);
+    handle('remove-model-from-collection', (_event, modelId: unknown, collectionId: unknown) => {
+        db.prepare('DELETE FROM model_collections WHERE model_id = ? AND collection_id = ?').run(asId(modelId, 'model id'), asId(collectionId, 'collection id'));
     });
 
     // ============ Watched folders ============
@@ -312,7 +342,18 @@ export function setupIpcHandlers(): void {
     });
 
     handle('open-folder', (_event, filePath: string) => {
+        // Only reveal library files or locations inside a watched folder (e.g. a freshly extracted ZIP), not arbitrary paths.
+        if (typeof filePath !== 'string' || !filePath) throw new Error('No path given');
+        const known = db.prepare('SELECT 1 FROM models WHERE filepath = ?').get(filePath);
+        const watchedRoots = db.prepare("SELECT folder_path FROM collections WHERE type = 'watched' AND is_active = 1").all() as Array<{ folder_path: string }>;
+        const insideWatched = watchedRoots.some((root) => isInsideDir(root.folder_path, filePath));
+        if (!known && !insideWatched) throw new Error('This location is not part of the library');
         shell.showItemInFolder(filePath);
+    });
+
+    handle('open-logs-folder', async () => {
+        const error = await shell.openPath(getLogDir(app.getPath('userData')));
+        if (error) throw new Error(error);
     });
 
     handle('get-app-version', () => APP_VERSION);

@@ -6,6 +6,7 @@ import { X, Tag as TagIcon, ExternalLink, Folder, Camera, Plus, Pencil, FileText
 import { useStore } from '../store/store';
 import GenericModel, { type ViewerDisplayOptions } from './GenericModel';
 import MetadataEditor from './MetadataEditor';
+import LocalEnvironment from './LocalEnvironment';
 import { exceedsBed, formatDimensions, formatFileSize, formatTriangles, formatVolume, httpUrl, thumbnailUrl } from '../lib/format';
 import type { ModelWithTags } from '../types';
 
@@ -203,7 +204,8 @@ export default function ModelViewer() {
                             camera={{ position: [6, 5, 7], fov: 45 }}
                             gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance', localClippingEnabled: true }}
                         >
-                            <Stage environment="city" intensity={0.6} adjustCamera={false}>
+                            <LocalEnvironment />
+                            <Stage environment={null} intensity={0.6} adjustCamera={false}>
                                 {showGrid && (
                                     <Grid
                                         args={[20, 20]}

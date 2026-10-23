@@ -16,10 +16,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKER_PATH = path.join(__dirname, 'indexer-worker.js');
 const CONCURRENCY = 2;
 const PROGRESS_THROTTLE_MS = 250;
+/** A job may take this long, plus JOB_TIMEOUT_PER_MB_MS per megabyte, before the worker is considered hung. */
+const JOB_TIMEOUT_BASE_MS = 60_000;
+const JOB_TIMEOUT_PER_MB_MS = 250;
+/** A file that crashes or hangs the worker this many times is given up on instead of retried forever. */
+const MAX_ATTEMPTS = 2;
 
 interface QueueEntry {
     modelId: number;
     force: boolean;
+    /** How many times this entry was in flight when the worker died. */
+    attempts?: number;
 }
 
 interface IndexerCallbacks {
@@ -37,6 +44,7 @@ let nextJobId = 1;
 const queue: QueueEntry[] = [];
 const queued = new Map<number, QueueEntry>();
 const inflight = new Map<number, QueueEntry>();
+const jobTimers = new Map<number, NodeJS.Timeout>();
 
 let completed = 0;
 let failed = 0;
@@ -99,15 +107,53 @@ function spawnWorker(): void {
         child = null;
         workerReady = false;
         // Put in-flight work back on the queue and restart if there is anything left to do.
+        // A file that keeps killing the worker is reported as failed rather than retried forever.
         for (const entry of inflight.values()) {
-            if (!queued.has(entry.modelId)) {
-                queue.unshift(entry);
-                queued.set(entry.modelId, entry);
+            if (queued.has(entry.modelId)) continue;
+            entry.attempts = (entry.attempts ?? 0) + 1;
+            if (entry.attempts >= MAX_ATTEMPTS) {
+                console.error(`[Indexer] Giving up on model ${entry.modelId}: the worker stopped ${entry.attempts} times while analysing it`);
+                failed++;
+                rememberFailure(entry.modelId);
+                continue;
             }
+            queue.unshift(entry);
+            queued.set(entry.modelId, entry);
         }
+        clearJobTimers();
         inflight.clear();
+        if (stopped) return;
         if (queue.length > 0) setTimeout(spawnWorker, 1000);
+        else finishBatchIfIdle();
     });
+}
+
+function clearJobTimers(): void {
+    for (const timer of jobTimers.values()) clearTimeout(timer);
+    jobTimers.clear();
+}
+
+function jobTimeoutFor(filepath: string): number {
+    let size = 0;
+    try {
+        size = fs.statSync(filepath).size;
+    } catch {
+        // The worker reports the real error; fall back to the base timeout.
+    }
+    return JOB_TIMEOUT_BASE_MS + Math.ceil(size / (1024 * 1024)) * JOB_TIMEOUT_PER_MB_MS;
+}
+
+/** A job that never answers means the worker is stuck on that file: give up on it and restart the worker. */
+function handleJobTimeout(jobId: number): void {
+    jobTimers.delete(jobId);
+    const entry = inflight.get(jobId);
+    if (!entry || !child) return;
+    inflight.delete(jobId);
+    console.error(`[Indexer] Analysis of model ${entry.modelId} timed out; restarting the worker`);
+    failed++;
+    rememberFailure(entry.modelId);
+    // The exit handler re-queues the other in-flight jobs and spawns a fresh worker.
+    child.kill();
 }
 
 function send(message: WorkerRequest): void {
@@ -157,10 +203,16 @@ function pump(): void {
         const job = buildJob(entry);
         if (!job) continue; // model was deleted while queued
         inflight.set(job.id, entry);
+        jobTimers.set(job.id, setTimeout(() => handleJobTimeout(job.id), jobTimeoutFor(job.filepath)));
         send({ type: 'analyze', job });
     }
 
     emitProgress();
+    finishBatchIfIdle();
+}
+
+/** Once the queue drains, report the batch (including any failures) and reset the counters. */
+function finishBatchIfIdle(): void {
     if (queue.length === 0 && inflight.size === 0) {
         emitProgress(true);
         if (failed > 0) {
@@ -184,7 +236,11 @@ function rememberFailure(modelId: number): void {
 
 function handleResult(message: Extract<WorkerResponse, { type: 'result' }>): void {
     if (stopped) return;
-    inflight.delete(message.id);
+    const timer = jobTimers.get(message.id);
+    if (timer) clearTimeout(timer);
+    jobTimers.delete(message.id);
+    // A late answer from a job that already timed out is ignored.
+    if (!inflight.delete(message.id)) return;
 
     if (message.ok) {
         try {
@@ -207,6 +263,7 @@ function handleResult(message: Extract<WorkerResponse, { type: 'result' }>): voi
 
 export function startIndexer(newCallbacks: IndexerCallbacks): void {
     callbacks = newCallbacks;
+    stopped = false;
     spawnWorker();
 }
 
@@ -246,6 +303,7 @@ export function stopIndexer(): void {
     stopped = true;
     queue.length = 0;
     queued.clear();
+    clearJobTimers();
     inflight.clear();
     if (child) {
         child.removeAllListeners();

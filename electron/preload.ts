@@ -47,6 +47,7 @@ const electronAPI: ElectronAPI = {
 
     // Utilities
     openFolder: (filePath) => ipcRenderer.invoke('open-folder', filePath),
+    openLogsFolder: () => ipcRenderer.invoke('open-logs-folder'),
     findDuplicates: () => ipcRenderer.invoke('find-duplicates'),
     getBedSize: () => ipcRenderer.invoke('get-bed-size'),
     setBedSize: (bed) => ipcRenderer.invoke('set-bed-size', bed),

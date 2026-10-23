@@ -4,11 +4,8 @@
  * and sends the PNG back.
  */
 import * as THREE from 'three';
-import { GLTFLoader, OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
-import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import type { FileType, ThumbnailRenderRequest } from '../types';
-import { loadThreeMfObject } from '../lib/threeMf';
-import { loadStepObject } from '../lib/step';
+import { disposeObject, loadModelObject } from '../lib/modelLoader';
 
 const SIZE = 512;
 const BACKGROUND = 0x232323;
@@ -29,53 +26,6 @@ function getRenderer(): THREE.WebGLRenderer {
     return renderer;
 }
 
-async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THREE.Object3D> {
-    if (fileType === 'stl') {
-        const geometry = new STLLoader().parse(buffer);
-        geometry.computeVertexNormals();
-        return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: MODEL_COLOR, roughness: 0.55, metalness: 0.05 }));
-    }
-    if (fileType === 'obj') {
-        const object = new OBJLoader().parse(new TextDecoder().decode(buffer));
-        object.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-                child.material = new THREE.MeshStandardMaterial({ color: MODEL_COLOR, roughness: 0.55, metalness: 0.05 });
-            }
-        });
-        return object;
-    }
-    if (fileType === 'glb') {
-        const gltf = await new GLTFLoader().parseAsync(buffer, '');
-        return gltf.scene;
-    }
-    if (fileType === 'usdz') {
-        return new USDZLoader().parse(new Uint8Array(buffer));
-    }
-    if (fileType === 'step') {
-        return await loadStepObject(buffer);
-    }
-    const blob = new Blob([buffer], { type: 'model/3mf' });
-    const url = URL.createObjectURL(blob);
-    try {
-        return await new ThreeMFLoader().loadAsync(url);
-    } catch {
-        // 3MF production extension (Bambu/Orca/Prusa split parts) — resolve it ourselves.
-        return await loadThreeMfObject(buffer);
-    } finally {
-        URL.revokeObjectURL(url);
-    }
-}
-
-function disposeObject(object: THREE.Object3D): void {
-    object.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            materials.forEach((m) => m.dispose());
-        }
-    });
-}
-
 /** Print files are Z-up; three.js is Y-up. Wrap the object so Z points up on screen. */
 function orient(object: THREE.Object3D): THREE.Group {
     const group = new THREE.Group();
@@ -86,7 +36,7 @@ function orient(object: THREE.Object3D): THREE.Group {
 
 export async function renderThumbnail(filepath: string, fileType: FileType): Promise<string> {
     const buffer = await window.electronAPI.readFileAsBuffer(filepath);
-    const object = await loadObject(buffer, fileType);
+    const object = await loadModelObject(buffer, fileType, () => new THREE.MeshStandardMaterial({ color: MODEL_COLOR, roughness: 0.55, metalness: 0.05 }));
     const gl = getRenderer();
 
     const scene = new THREE.Scene();

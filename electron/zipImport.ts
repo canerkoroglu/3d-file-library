@@ -5,11 +5,24 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { Transform } from 'stream';
+import { pipeline } from 'stream/promises';
 import JSZip from 'jszip';
 import { getDatabase } from './database';
 import { fileTypeOf, importModel, notifyModelsUpdated } from './library';
 import { enqueueModel } from './indexer';
 import type { ZipImportResult } from '../src/types';
+
+/** Guards against archive bombs and archives too large to handle in memory. */
+export const ZIP_LIMITS = {
+    /** The archive itself is read into memory, so keep it well under Node's buffer limit. */
+    maxArchiveBytes: 1024 * 1024 * 1024,
+    maxEntries: 10_000,
+    /** Total bytes written for one archive. */
+    maxTotalBytes: 8 * 1024 * 1024 * 1024,
+};
+
+class ZipLimitError extends Error {}
 
 const JUNK_SEGMENTS = new Set(['__MACOSX', '.DS_Store', 'Thumbs.db', 'desktop.ini']);
 
@@ -52,6 +65,10 @@ export function commonTopLevel(names: string[]): string | null {
     return names.every((n) => n.includes('/')) ? common : null;
 }
 
+function formatGb(bytes: number): string {
+    return `${Math.round(bytes / (1024 * 1024 * 1024))} GB`;
+}
+
 export async function importZipFiles(zipPaths: string[], collectionId: number): Promise<ZipImportResult[]> {
     const collection = getDatabase()
         .prepare("SELECT folder_path FROM collections WHERE id = ? AND type = 'watched' AND is_active = 1")
@@ -67,8 +84,16 @@ export async function importZipFiles(zipPaths: string[], collectionId: number): 
         results.push(result);
 
         try {
+            const { size: archiveSize } = await fs.promises.stat(zipPath);
+            if (archiveSize > ZIP_LIMITS.maxArchiveBytes) {
+                throw new ZipLimitError(`The archive is larger than ${formatGb(ZIP_LIMITS.maxArchiveBytes)}; extract it manually into the watched folder instead.`);
+            }
             const zip = await JSZip.loadAsync(await fs.promises.readFile(zipPath));
             const entries = Object.values(zip.files).filter((entry) => !entry.dir && !isJunkEntry(entry.name));
+            if (entries.length > ZIP_LIMITS.maxEntries) {
+                throw new ZipLimitError(`The archive contains ${entries.length} files (limit ${ZIP_LIMITS.maxEntries}).`);
+            }
+            let totalBytes = 0;
             const strip = commonTopLevel(entries.map((e) => e.name));
 
             const folder = await uniqueDirectory(root, path.basename(zipPath, path.extname(zipPath)));
@@ -85,7 +110,24 @@ export async function importZipFiles(zipPaths: string[], collectionId: number): 
                 }
                 const target = path.join(folder, relative);
                 await fs.promises.mkdir(path.dirname(target), { recursive: true });
-                await fs.promises.writeFile(target, await entry.async('nodebuffer'));
+                // Stream each entry to disk and count the real decompressed bytes, so a tiny archive that
+                // inflates to many gigabytes is stopped instead of exhausting memory or disk.
+                const counter = new Transform({
+                    transform(chunk: Buffer, _encoding, callback) {
+                        totalBytes += chunk.length;
+                        if (totalBytes > ZIP_LIMITS.maxTotalBytes) {
+                            callback(new ZipLimitError(`The archive expands to more than ${formatGb(ZIP_LIMITS.maxTotalBytes)}.`));
+                            return;
+                        }
+                        callback(null, chunk);
+                    },
+                });
+                try {
+                    await pipeline(entry.nodeStream('nodebuffer'), counter, fs.createWriteStream(target));
+                } catch (error) {
+                    await fs.promises.rm(target, { force: true }).catch(() => undefined);
+                    throw error;
+                }
                 result.extracted++;
                 if (fileTypeOf(target)) modelFiles.push(target);
             }

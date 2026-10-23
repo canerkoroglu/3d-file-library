@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { FileArchive } from 'lucide-react';
 import { useStore } from './store/store';
 import Sidebar from './components/Sidebar';
 import FilterBar from './components/FilterBar';
 import ModelGrid from './components/ModelGrid';
-import ModelViewer from './components/ModelViewer';
-import DuplicatesModal from './components/DuplicatesModal';
-import SettingsModal from './components/SettingsModal';
 import BulkActionsBar from './components/BulkActionsBar';
-import ImportZipDialog from './components/ImportZipDialog';
 import UpdateBanner from './components/UpdateBanner';
 import ToastHost from './components/ToastHost';
 import { describeError } from './lib/errors';
+
+// Dialogs and the 3D viewer are loaded on first use so the library grid appears sooner.
+const ModelViewer = lazy(() => import('./components/ModelViewer'));
+const DuplicatesModal = lazy(() => import('./components/DuplicatesModal'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const ImportZipDialog = lazy(() => import('./components/ImportZipDialog'));
 
 function App() {
     const { loadModels, loadTags, loadCollections, loadSlicers, loadAiSettings, loadBedSize, setIndexProgress, setUpdateStatus, setAiProgress, pushToast, isViewerOpen, isDuplicatesModalOpen, isSettingsOpen, importZipDialog, openImportZip, selectAllModels, clearSelection } = useStore();
@@ -158,10 +160,12 @@ function App() {
                 </div>
             </div>
 
-            {isViewerOpen && <ModelViewer />}
-            {isDuplicatesModalOpen && <DuplicatesModal />}
-            {isSettingsOpen && <SettingsModal />}
-            {importZipDialog.open && <ImportZipDialog />}
+            <Suspense fallback={null}>
+                {isViewerOpen && <ModelViewer />}
+                {isDuplicatesModalOpen && <DuplicatesModal />}
+                {isSettingsOpen && <SettingsModal />}
+                {importZipDialog.open && <ImportZipDialog />}
+            </Suspense>
             <BulkActionsBar />
             <UpdateBanner />
             <ToastHost />

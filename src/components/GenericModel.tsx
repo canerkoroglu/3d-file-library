@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { GLTFLoader, OBJLoader, STLLoader, ThreeMFLoader } from 'three-stdlib';
-import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import * as THREE from 'three';
 import type { FileType } from '../types';
-import { loadThreeMfObject } from '../lib/threeMf';
-import { loadStepObject } from '../lib/step';
+import { disposeMaterials, disposeObject, loadModelObject } from '../lib/modelLoader';
 
 export interface ViewerDisplayOptions {
     wireframe: boolean;
@@ -24,55 +21,8 @@ interface GenericModelProps {
 
 const TARGET_SIZE = 5;
 
-function disposeObject(object: THREE.Object3D): void {
-    object.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            materials.forEach((m) => m.dispose());
-        }
-    });
-}
-
 function makeMaterial(color: string): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide });
-}
-
-async function loadObject(buffer: ArrayBuffer, fileType: FileType): Promise<THREE.Object3D> {
-    if (fileType === 'stl') {
-        const geometry = new STLLoader().parse(buffer);
-        geometry.computeVertexNormals();
-        return new THREE.Mesh(geometry, makeMaterial('#3b82f6'));
-    }
-    if (fileType === 'obj') {
-        const object = new OBJLoader().parse(new TextDecoder().decode(buffer));
-        object.traverse((child) => {
-            if (child instanceof THREE.Mesh) child.material = makeMaterial('#3b82f6');
-        });
-        return object;
-    }
-    if (fileType === 'glb') {
-        const gltf = await new GLTFLoader().parseAsync(buffer, '');
-        return gltf.scene;
-    }
-    if (fileType === 'usdz') {
-        return new USDZLoader().parse(new Uint8Array(buffer));
-    }
-    if (fileType === 'step') {
-        return await loadStepObject(buffer);
-    }
-    const blob = new Blob([buffer], { type: 'model/3mf' });
-    const url = URL.createObjectURL(blob);
-    try {
-        return await new ThreeMFLoader().loadAsync(url);
-    } catch (error) {
-        // Slicers (Bambu, Orca, Prusa) split geometry into external model parts via the
-        // 3MF production extension, which the stock loader cannot resolve. Parse it ourselves.
-        console.warn('ThreeMFLoader failed; using production-extension fallback:', error);
-        return await loadThreeMfObject(buffer);
-    } finally {
-        URL.revokeObjectURL(url);
-    }
 }
 
 interface Prepared {
@@ -113,6 +63,28 @@ function prepare(object: THREE.Object3D): Prepared {
     return { holder, height: size.y * scale, originalMaterials };
 }
 
+/**
+ * Frees a loaded model. Meshes may currently show the shared uniform material, so dispose the
+ * geometry plus the materials that came with the file instead of whatever is assigned right now.
+ */
+function releasePrepared(prepared: Prepared): void {
+    const fileMaterials = new Set<THREE.Material>();
+    for (const original of prepared.originalMaterials.values()) {
+        for (const m of Array.isArray(original) ? original : [original]) fileMaterials.add(m);
+    }
+    const inUse = new Set<THREE.Material>();
+    prepared.holder.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+            for (const m of Array.isArray(child.material) ? child.material : [child.material]) {
+                if (!fileMaterials.has(m)) inUse.add(m);
+            }
+        }
+    });
+    // Geometry and any file materials still assigned are freed here; the uniform material is kept.
+    disposeObject(prepared.holder, inUse);
+    for (const original of prepared.originalMaterials.values()) disposeMaterials(original);
+}
+
 export default function GenericModel({ filepath, fileType, options, onError }: GenericModelProps) {
     const [prepared, setPrepared] = useState<Prepared | null>(null);
     const uniformMaterial = useMemo(() => makeMaterial(options.uniformColor), [options.uniformColor]);
@@ -126,7 +98,7 @@ export default function GenericModel({ filepath, fileType, options, onError }: G
             try {
                 const buffer = await window.electronAPI.readFileAsBuffer(filepath);
                 if (cancelled) return;
-                const raw = await loadObject(buffer, fileType);
+                const raw = await loadModelObject(buffer, fileType, () => makeMaterial('#3b82f6'));
                 if (cancelled) {
                     disposeObject(raw);
                     return;
@@ -142,7 +114,7 @@ export default function GenericModel({ filepath, fileType, options, onError }: G
 
         return () => {
             cancelled = true;
-            if (loaded) disposeObject(loaded.holder);
+            if (loaded) releasePrepared(loaded);
             setPrepared(null);
         };
     }, [filepath, fileType, onError]);

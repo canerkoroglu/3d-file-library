@@ -13,15 +13,28 @@ import { getSetting, setSetting } from './settings';
 import { getAiConfig } from './ai/provider';
 import { enqueueEnrichment, startEnrichment } from './ai/enrichment';
 import { rebuildSearchIndex } from './library';
+import { initFileLogging } from './logger';
 import type { FileType, IndexProgress } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MODELS_UPDATED_DEBOUNCE_MS = 300;
 
-process.on('uncaughtException', (error) => console.error('CRITICAL: Uncaught exception:', error));
-process.on('unhandledRejection', (reason) => console.error('CRITICAL: Unhandled rejection:', reason));
-
 let mainWindow: BrowserWindow | null = null;
+
+// Unexpected errors are written to the log file and surfaced once, so they are not silently lost.
+let reportedUnexpectedError = false;
+function reportUnexpectedError(kind: string, error: unknown): void {
+    console.error(`CRITICAL: ${kind}:`, error);
+    if (reportedUnexpectedError) return;
+    reportedUnexpectedError = true;
+    sendToRenderer('app:notice', {
+        kind: 'error',
+        title: 'Something went wrong in the background',
+        message: 'Modelist kept running, but if something looks off, restart it. Details are in the log (Settings → About → Open log folder).',
+    });
+}
+process.on('uncaughtException', (error) => reportUnexpectedError('Uncaught exception', error));
+process.on('unhandledRejection', (reason) => reportUnexpectedError('Unhandled rejection', reason));
 
 function sendToRenderer(channel: string, payload?: unknown): void {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
@@ -112,6 +125,7 @@ function registerMediaProtocol(): void {
 if (process.env.MODELIST_USER_DATA) {
     app.setPath('userData', path.resolve(process.env.MODELIST_USER_DATA));
 }
+initFileLogging(app.getPath('userData'));
 
 protocol.registerSchemesAsPrivileged([
     { scheme: 'media', privileges: { secure: true, standard: true, supportFetchAPI: true, bypassCSP: true } },
@@ -183,9 +197,36 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', async () => {
-    stopIndexer();
-    stopThumbnailQueue();
-    await stopAllWatchers();
-    closeDatabase();
+// Electron does not wait for async 'before-quit' listeners, so hold the quit until the watchers
+// have stopped and the database is closed cleanly (WAL checkpointed), then exit for real.
+let shutdownState: 'running' | 'stopping' | 'done' = 'running';
+app.on('before-quit', (event) => {
+    if (shutdownState === 'done') return;
+    event.preventDefault();
+    if (shutdownState === 'stopping') return;
+    shutdownState = 'stopping';
+
+    const forceExit = setTimeout(() => {
+        console.error('[App] Shutdown took too long; exiting anyway');
+        shutdownState = 'done';
+        app.exit(0);
+    }, 5000);
+
+    void (async () => {
+        try {
+            stopIndexer();
+            stopThumbnailQueue();
+            await stopAllWatchers();
+        } catch (error) {
+            console.error('[App] Error while stopping background work:', error);
+        }
+        try {
+            closeDatabase();
+        } catch (error) {
+            console.error('[App] Error while closing the database:', error);
+        }
+        clearTimeout(forceExit);
+        shutdownState = 'done';
+        app.quit();
+    })();
 });
