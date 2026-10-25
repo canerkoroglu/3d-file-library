@@ -1,18 +1,17 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-vi.mock('better-sqlite3', async () => ({ default: (await import('./helpers/sqliteShim')).default }));
 
 const { initDatabase, closeDatabase, getDatabase, SCHEMA_VERSION } = await import('../electron/database');
 const library = await import('../electron/library');
-const { default: Database } = await import('./helpers/sqliteShim');
+const { default: Database } = await import('better-sqlite3');
 
 let dir: string;
 
 beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modelist-db-'));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meshvault-db-'));
 });
 
 afterEach(() => {

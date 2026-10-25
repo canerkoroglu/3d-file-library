@@ -356,7 +356,6 @@ export interface ElectronAPI {
     buildEmbeddings: () => Promise<EmbeddingBuildResult>;
     cancelEmbeddingBuild: () => Promise<void>;
     updateModelMetadata: (modelId: number, metadata: SourceMetadata) => Promise<void>;
-    readFileAsBuffer: (filepath: string) => Promise<ArrayBuffer>;
     captureThumbnail: (modelId: number, imageData: string) => Promise<void>;
 
     // Indexer & library maintenance

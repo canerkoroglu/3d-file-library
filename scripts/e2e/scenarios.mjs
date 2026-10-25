@@ -18,8 +18,13 @@ const clickButton = (text) => `(() => {
     button.click();
     return true;
 })()`;
+// Cards are taken in on-screen order: the virtualised grid may keep rows in the DOM out of order after scrolling.
 const clickCard = (index, init = {}) => `(() => {
-    const cards = document.querySelectorAll('.model-card');
+    const cards = [...document.querySelectorAll('.model-card')].sort((a, b) => {
+        const ra = a.getBoundingClientRect();
+        const rb = b.getBoundingClientRect();
+        return ra.top - rb.top || ra.left - rb.left;
+    });
     cards[${index}].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...${JSON.stringify(init)} }));
     return cards.length;
 })()`;
@@ -89,6 +94,12 @@ export const scenarios = [
             }
             assert.deepEqual(await footer(), [], 'everything is loaded after scrolling');
             await app.evaluate(`(() => { document.querySelector('.overflow-y-auto.bg-primary-bg').scrollTop = 0; return true; })()`);
+            // Wait for the virtualised grid to re-render the first rows before later scenarios click cards.
+            await app.waitFor(`(() => {
+                const grid = document.querySelector('.overflow-y-auto.bg-primary-bg');
+                const top = grid.getBoundingClientRect().top;
+                return [...document.querySelectorAll('.model-card')].some((c) => Math.abs(c.getBoundingClientRect().top - top) < 120);
+            })()`, { label: 'the grid to show its first row again' });
         },
     },
     {
@@ -185,15 +196,15 @@ export const scenarios = [
             await app.evaluate(`(() => { [...document.querySelectorAll('.model-card')].find((c) => !c.textContent.includes('Missing')).click(); return true; })()`);
             await app.waitFor(`!!document.querySelector('button[title="Close (Esc)"]')`, { label: 'the viewer' });
             await app.evaluate(clickButton('+ New Tag'));
-            await sleep(150);
+            await app.waitFor(`!!document.querySelector('input[placeholder="Tag name…"]')`, { timeout: 10_000, label: 'the new-tag input' });
             await app.evaluate(`(() => { const input = document.querySelector('input[placeholder="Tag name…"]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(input, 'Printed'); input.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
-            for (let attempt = 0; attempt < 4; attempt++) {
-                await sleep(400);
-                await app.evaluate(`(() => { document.querySelector('input[placeholder="Tag name…"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; })()`);
-                await sleep(500);
-                if (await app.evaluate(`document.querySelectorAll('[data-testid="toast-host"] [role]').length > 0`)) break;
-            }
-            const toasts = await app.waitFor(`[...document.querySelectorAll('[data-testid="toast-host"] [role]')].map((t) => t.dataset.kind + ': ' + t.textContent)`, { timeout: 5_000, label: 'an error toast' });
+            await app.waitFor(`document.querySelector('input[placeholder="Tag name…"]')?.value === 'Printed'`, { timeout: 10_000, label: 'the tag name to be typed' });
+            await app.evaluate(`(() => { document.querySelector('input[placeholder="Tag name…"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; })()`);
+            // Wait for the error toast specifically: other toasts (e.g. from the previous scenario) may still be showing.
+            const toasts = await app.waitFor(`(() => {
+                const t = [...document.querySelectorAll('[data-testid="toast-host"] [role]')].map((t) => t.dataset.kind + ': ' + t.textContent);
+                return t.some((x) => x.includes('already exists')) && t;
+            })()`, { timeout: 10_000, label: 'an error toast' });
             assert.ok(toasts.some((t) => t.startsWith('error:') && t.includes('already exists')), `expected a duplicate-name error, got ${JSON.stringify(toasts)}`);
             await app.evaluate(`(() => { document.querySelector('button[title="Close (Esc)"]').click(); return true; })()`);
         },
@@ -271,7 +282,10 @@ export const scenarios = [
             assert.match(version, /Version \d+\.\d+\.\d+/);
             const slicers = await app.evaluate(`[...document.querySelectorAll('input[name="default-slicer"]')].length`);
             assert.ok(slicers >= 1, 'at least the system default handler is listed');
-            assert.equal(await app.evaluate(`document.querySelector('[data-testid="update-status"]').textContent.trim()`), 'Updates are only checked in installed builds.');
+            // A development build cannot update itself; a packaged build (MESHVAULT_APP) checks normally.
+            if (!process.env.MESHVAULT_APP && !process.env.MODELIST_APP) {
+                assert.equal(await app.evaluate(`document.querySelector('[data-testid="update-status"]').textContent.trim()`), 'Updates are only checked in installed builds.');
+            }
             await app.evaluate(clickButton('Close'));
         },
     },

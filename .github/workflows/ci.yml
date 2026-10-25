@@ -23,7 +23,14 @@ jobs:
 
   e2e:
     needs: check
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # CI machines have no GPU: render WebGL in software so the viewer and thumbnails work.
+      MESHVAULT_SOFTWARE_GL: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,7 +38,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run e2e
+      - name: End-to-end tests
+        if: runner.os != 'Linux'
+        run: npm run e2e
+      - name: End-to-end tests (virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" npm run e2e
 
   build:
     needs: check
@@ -41,7 +53,7 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     env:
-      # CI has no signing certificates; build unsigned artifacts instead of failing.
+      # Branch builds are never signed; signing happens in the release workflow when certificates are configured.
       CSC_IDENTITY_AUTO_DISCOVERY: false
     steps:
       - uses: actions/checkout@v4
@@ -51,10 +63,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx vite build
-      - run: npx electron-builder --publish never
+      - run: npx electron-builder --config electron-builder.config.cjs --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: modelist-${{ matrix.os }}
+          name: meshvault-${{ matrix.os }}
           path: |
             release/**/*.dmg
             release/**/*.exe

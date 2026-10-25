@@ -1,6 +1,6 @@
-# Modelist AI backend (GPU, Docker)
+# MeshVault AI backend (GPU, Docker)
 
-A GPU-accelerated, OpenAI-compatible LLM server for Modelist's AI assistant, using
+A GPU-accelerated, OpenAI-compatible LLM server for MeshVault's AI assistant, using
 [Ollama](https://ollama.com). One container serves **both** the chat model (descriptions,
 tags, plain-language search) and the **embedding** model (the "Similar models" feature).
 
@@ -40,7 +40,7 @@ curl http://localhost:11434/v1/models          # lists qwen3:8b and nomic-embed-
 docker exec modelist-ollama nvidia-smi         # model resident in VRAM after a request
 ```
 
-## Point Modelist at it
+## Point MeshVault at it
 
 Settings → **AI assistant**:
 
@@ -50,7 +50,7 @@ Settings → **AI assistant**:
 | Model | `qwen3:8b` |
 | Embedding model | `nomic-embed-text` |
 
-Then **Enabled** → **Test connection**. Modelist auto-detects Ollama and uses its native
+Then **Enabled** → **Test connection**. MeshVault auto-detects Ollama and uses its native
 `think:false` route. For "Similar models", click **Build semantic index** once.
 
 > Note: this is **Ollama**, not the LM Studio behind your `openai.caner.in`. Model names differ
@@ -81,10 +81,10 @@ llm.example.com {
 }
 ```
 
-Then set Modelist's Base URL to `https://llm.example.com/v1` and the API key to your credentials.
+Then set MeshVault's Base URL to `https://llm.example.com/v1` and the API key to your credentials.
 
 ## Alternatives
 
-Ollama is the simplest match for Modelist. If you need higher throughput or exact HF model ids,
-**vLLM** or **LocalAI** are OpenAI-compatible too — Modelist will drive them through the generic
+Ollama is the simplest match for MeshVault. If you need higher throughput or exact HF model ids,
+**vLLM** or **LocalAI** are OpenAI-compatible too — MeshVault will drive them through the generic
 OpenAI path (no `think:false`), so keep the response-timeout generous for reasoning models.

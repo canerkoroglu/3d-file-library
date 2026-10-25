@@ -91,7 +91,7 @@ function emitProgress(force = false): void {
 function spawnWorker(): void {
     if (child || stopped) return;
     console.log('[Indexer] Starting worker process');
-    child = utilityProcess.fork(WORKER_PATH, [], { serviceName: 'modelist-indexer' });
+    child = utilityProcess.fork(WORKER_PATH, [], { serviceName: 'meshvault-indexer' });
 
     child.on('message', (message: WorkerResponse) => {
         if (message.type === 'ready') {

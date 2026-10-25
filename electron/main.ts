@@ -1,4 +1,5 @@
 import { app, BrowserWindow, net, protocol, shell } from 'electron';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { closeDatabase, getDatabase, initDatabase } from './database';
@@ -7,13 +8,14 @@ import { libraryEvents, notifyModelsUpdated } from './library';
 import { setupIpcHandlers } from './ipcHandlers';
 import { initializeWatchers, stopAllWatchers } from './fileWatcher';
 import { enqueueAll, reportProgress, startIndexer, stopIndexer } from './indexer';
-import { getThumbnailQueueSize, registerThumbnailIpc, requestThumbnailRender, setThumbnailQueueListener, setThumbnailWindow, stopThumbnailQueue } from './thumbnails';
+import { getThumbnailQueueSize, registerThumbnailIpc, requestThumbnailRender, setThumbnailQueueListener, setThumbnailWindowFactory, stopThumbnailQueue } from './thumbnails';
 import { initUpdater } from './updater';
 import { getSetting, setSetting } from './settings';
-import { getAiConfig } from './ai/provider';
+import { getAiConfig, loadStoredApiKey } from './ai/provider';
 import { enqueueEnrichment, startEnrichment } from './ai/enrichment';
 import { rebuildSearchIndex } from './library';
 import { initFileLogging } from './logger';
+import { MODEL_SCHEME_PRIVILEGES, registerModelProtocol } from './modelProtocol';
 import type { FileType, IndexProgress } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -30,7 +32,7 @@ function reportUnexpectedError(kind: string, error: unknown): void {
     sendToRenderer('app:notice', {
         kind: 'error',
         title: 'Something went wrong in the background',
-        message: 'Modelist kept running, but if something looks off, restart it. Details are in the log (Settings → About → Open log folder).',
+        message: `${app.getName()} kept running, but if something looks off, restart it. Details are in the log (Settings → About → Open log folder).`,
     });
 }
 process.on('uncaughtException', (error) => reportUnexpectedError('Uncaught exception', error));
@@ -99,10 +101,36 @@ function createWindow(): void {
 
     mainWindow.on('closed', () => {
         mainWindow = null;
-        setThumbnailWindow(null);
+        // The hidden thumbnail window would otherwise keep the app alive on Windows and Linux.
+        if (process.platform !== 'darwin') app.quit();
     });
+}
 
-    setThumbnailWindow(mainWindow);
+/** Page fragment that tells the renderer bundle to run only the thumbnail renderer. */
+const THUMBNAIL_PAGE_HASH = 'thumbnail-renderer';
+
+/** The hidden window that renders 3D thumbnails, so batches of renders never stall the main window. */
+function createThumbnailWindow(): BrowserWindow {
+    const win = new BrowserWindow({
+        show: false,
+        width: 512,
+        height: 512,
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.cjs'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            // Keep timers and rendering running at full speed although the window is never shown.
+            backgroundThrottling: false,
+        },
+    });
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    win.webContents.on('will-navigate', (event) => event.preventDefault());
+    if (process.env.VITE_DEV_SERVER_URL) {
+        void win.loadURL(`${process.env.VITE_DEV_SERVER_URL}#${THUMBNAIL_PAGE_HASH}`);
+    } else {
+        void win.loadFile(path.join(__dirname, '../dist/index.html'), { hash: THUMBNAIL_PAGE_HASH });
+    }
+    return win;
 }
 
 /** Serves thumbnails to the renderer. Only files inside the thumbnail directory are allowed. */
@@ -121,19 +149,47 @@ function registerMediaProtocol(): void {
     });
 }
 
-// Lets tests and secondary profiles run against a separate library (e.g. MODELIST_USER_DATA=/tmp/profile).
-if (process.env.MODELIST_USER_DATA) {
-    app.setPath('userData', path.resolve(process.env.MODELIST_USER_DATA));
+// Environment overrides accept the current MESHVAULT_* names and the MODELIST_* names used before the rename.
+function envSetting(name: string): string | undefined {
+    return process.env[`MESHVAULT_${name}`] || process.env[`MODELIST_${name}`] || undefined;
+}
+
+/**
+ * Where the library lives. Before the rename to MeshVault, installed builds stored it under
+ * "Modelist" and development runs under "stl-viewer"; an existing library there keeps being used
+ * so nothing is lost. New installs use the new name.
+ * MESHVAULT_USER_DATA=/tmp/profile points tests and secondary profiles at a separate library.
+ */
+const LEGACY_USER_DATA_DIRS = ['Modelist', 'stl-viewer'];
+function resolveUserDataDir(): string {
+    const override = envSetting('USER_DATA');
+    if (override) return path.resolve(override);
+    const current = app.getPath('userData');
+    if (fs.existsSync(path.join(current, 'modelist.db'))) return current;
+    for (const name of LEGACY_USER_DATA_DIRS) {
+        const legacy = path.join(app.getPath('appData'), name);
+        if (fs.existsSync(path.join(legacy, 'modelist.db'))) return legacy;
+    }
+    return current;
+}
+app.setPath('userData', resolveUserDataDir());
+
+// MESHVAULT_SOFTWARE_GL=1 renders WebGL on the CPU (SwiftShader), for machines without a usable GPU such as CI runners.
+if (envSetting('SOFTWARE_GL')) {
+    app.commandLine.appendSwitch('use-angle', 'swiftshader');
+    app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+    app.commandLine.appendSwitch('ignore-gpu-blocklist');
 }
 initFileLogging(app.getPath('userData'));
 
 protocol.registerSchemesAsPrivileged([
     { scheme: 'media', privileges: { secure: true, standard: true, supportFetchAPI: true, bypassCSP: true } },
+    MODEL_SCHEME_PRIVILEGES,
 ]);
 
-/** MODELIST_WATCH_FOLDERS=<path>[:<path>...] registers watched folders at startup (scripted setups, end-to-end tests). */
+/** MESHVAULT_WATCH_FOLDERS=<path>[:<path>...] registers watched folders at startup (scripted setups, end-to-end tests). */
 function registerWatchFoldersFromEnv(): void {
-    const raw = process.env.MODELIST_WATCH_FOLDERS;
+    const raw = envSetting('WATCH_FOLDERS');
     if (!raw) return;
     const db = getDatabase();
     for (const folder of raw.split(path.delimiter).map((p) => p.trim()).filter(Boolean)) {
@@ -157,10 +213,13 @@ app.whenReady().then(async () => {
         rebuildSearchIndex();
         setSetting('search.needsRebuild', null);
     }
+    await loadStoredApiKey();
     registerWatchFoldersFromEnv();
     registerMediaProtocol();
+    registerModelProtocol();
     registerThumbnailIpc();
     setupIpcHandlers();
+    setThumbnailWindowFactory(createThumbnailWindow);
     createWindow();
 
     startIndexer({
@@ -189,7 +248,8 @@ app.whenReady().then(async () => {
     enqueueAll();
 
     app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        // The hidden thumbnail window may still exist, so check for the main window itself.
+        if (!mainWindow) createWindow();
     });
 });
 

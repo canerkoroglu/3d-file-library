@@ -18,6 +18,7 @@ export function getUserDataDir(): string {
 }
 
 export function getDatabasePath(): string {
+    // File name kept from before the MeshVault rename so existing libraries open unchanged.
     return path.join(getUserDataDir(), 'modelist.db');
 }
 

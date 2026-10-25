@@ -28,7 +28,6 @@ vi.mock('electron', () => ({
         },
     },
 }));
-vi.mock('better-sqlite3', async () => ({ default: (await import('./helpers/sqliteShim')).default }));
 
 const { initDatabase, closeDatabase } = await import('../electron/database');
 const { setUserDataDir } = await import('../electron/paths');
@@ -55,7 +54,7 @@ function jobsSentTo(worker: FakeWorker) {
 
 beforeEach(() => {
     vi.useFakeTimers();
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modelist-indexer-'));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meshvault-indexer-'));
     setUserDataDir(dir);
     initDatabase(':memory:');
     notices.length = 0;

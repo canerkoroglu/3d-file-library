@@ -17,7 +17,8 @@ const CONTENT_SECURITY_POLICY = [
     "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: media:",
-    "connect-src 'self' data: blob: media:",
+    // model: streams library files to the viewer and the mesh worker.
+    "connect-src 'self' data: blob: media: model:",
     "worker-src 'self' blob:",
     "font-src 'self' data:",
     "object-src 'none'",
@@ -26,7 +27,7 @@ const CONTENT_SECURITY_POLICY = [
 ].join('; ');
 
 const cspPlugin: Plugin = {
-    name: 'modelist-csp',
+    name: 'meshvault-csp',
     apply: 'build',
     transformIndexHtml: () => [
         { tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: CONTENT_SECURITY_POLICY }, injectTo: 'head-prepend' },
@@ -86,7 +87,7 @@ export default defineConfig({
     ],
     resolve: {
         alias: {
-            '@': path.resolve(__dirname, './src'),
+            '@': path.resolve(import.meta.dirname, './src'),
         },
     },
     server: {
@@ -94,5 +95,9 @@ export default defineConfig({
     },
     build: {
         outDir: 'dist',
+    },
+    // ES-module workers so the mesh worker can lazy-load the STEP engine.
+    worker: {
+        format: 'es',
     },
 });

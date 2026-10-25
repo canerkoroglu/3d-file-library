@@ -18,8 +18,26 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     env:
-      # No signing certificates in CI; builds are unsigned.
-      CSC_IDENTITY_AUTO_DISCOVERY: false
+      # Code signing (see docs/code-signing.md). Each platform signs only when its secrets are set;
+      # otherwise the installers are built unsigned, exactly as before.
+      # macOS: Developer ID certificate (.p12, base64) and notarisation credentials.
+      CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE || '' }}
+      CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE_PASSWORD || '' }}
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ (matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE != '') && 'true' || 'false' }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Windows, option A: a .pfx code-signing certificate (base64).
+      WIN_CSC_LINK: ${{ secrets.WIN_CERTIFICATE }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+      # Windows, option B: Azure Trusted Signing (secrets for the service principal, variables for the account).
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+      AZURE_TRUSTED_SIGNING_ACCOUNT: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+      AZURE_TRUSTED_SIGNING_PROFILE: ${{ vars.AZURE_TRUSTED_SIGNING_PROFILE }}
+      WIN_PUBLISHER_NAME: ${{ vars.WIN_PUBLISHER_NAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,7 +48,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npx vite build
-      - run: npx electron-builder --publish never
+      - run: npx electron-builder --config electron-builder.config.cjs --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: installers-${{ matrix.os }}
@@ -58,6 +76,6 @@ jobs:
       - name: Create or update the draft release and upload installers
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
-            --title "Modelist $GITHUB_REF_NAME" --generate-notes \
+            --title "MeshVault $GITHUB_REF_NAME" --generate-notes \
             || echo "Release already exists; uploading assets to it."
           gh release upload "$GITHUB_REF_NAME" dist-artifacts/* --repo "$GITHUB_REPOSITORY" --clobber

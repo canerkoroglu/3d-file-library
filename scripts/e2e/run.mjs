@@ -5,7 +5,7 @@
 //   npm run e2e                 build + run everything
 //   npm run e2e -- --no-build   reuse the existing dist/ and dist-electron/
 //   npm run e2e -- --filter zip run only scenarios whose name contains "zip"
-//   MODELIST_APP=<packaged executable> npm run e2e -- --no-build   test a packaged build
+//   MESHVAULT_APP=<packaged executable> npm run e2e -- --no-build   test a packaged build
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -38,7 +38,7 @@ if (!noBuild) {
     }
 }
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'modelist-e2e-'));
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'meshvault-e2e-'));
 const libraryDir = path.join(tmpDir, 'library');
 const profileDir = path.join(tmpDir, 'profile');
 fs.mkdirSync(libraryDir, { recursive: true });
@@ -56,7 +56,7 @@ const app = await launchApp({
     profileDir,
     watchFolders: [libraryDir],
     port: Number(process.env.CDP_PORT ?? 9333),
-    appPath: process.env.MODELIST_APP,
+    appPath: process.env.MESHVAULT_APP ?? process.env.MODELIST_APP,
 });
 
 const context = { app, library, profileDir, tmpDir, fixtures, fakeLlm };

@@ -4,7 +4,6 @@ import os from 'os';
 import path from 'path';
 import JSZip from 'jszip';
 
-vi.mock('better-sqlite3', async () => ({ default: (await import('./helpers/sqliteShim')).default }));
 vi.mock('../electron/indexer', () => ({ enqueueModel: () => {} }));
 
 const { initDatabase, closeDatabase, getDatabase } = await import('../electron/database');
@@ -24,7 +23,7 @@ async function writeZip(name: string, files: Record<string, string | Buffer>): P
 }
 
 beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modelist-zip-'));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meshvault-zip-'));
     library = path.join(dir, 'library');
     fs.mkdirSync(library);
     initDatabase(':memory:');

@@ -57,20 +57,32 @@ export function originOf(baseUrl: string): string {
     return normaliseBaseUrl(baseUrl).replace(/\/v1$/i, '');
 }
 
-function encryptKey(key: string): string {
-    if (safeStorage.isEncryptionAvailable()) return `enc:${safeStorage.encryptString(key).toString('base64')}`;
+// The API key is decrypted once at startup (safeStorage's encryption is asynchronous since Electron 45)
+// and kept in memory, so the rest of the code can read the configuration synchronously.
+let cachedApiKey: string | null = null;
+
+async function encryptKey(key: string): Promise<string> {
+    if (await safeStorage.isAsyncEncryptionAvailable()) return `enc:${(await safeStorage.encryptStringAsync(key)).toString('base64')}`;
     return `plain:${Buffer.from(key, 'utf8').toString('base64')}`;
 }
 
-function decryptKey(stored: string | null): string | null {
-    if (!stored) return null;
+/** Reads and decrypts the stored API key into memory. Call once after the app is ready. */
+export async function loadStoredApiKey(): Promise<void> {
+    const stored = getSetting<string | null>(KEYS.apiKey, null);
+    cachedApiKey = null;
+    if (!stored) return;
     try {
-        if (stored.startsWith('enc:')) return safeStorage.decryptString(Buffer.from(stored.slice(4), 'base64'));
-        if (stored.startsWith('plain:')) return Buffer.from(stored.slice(6), 'base64').toString('utf8');
+        if (stored.startsWith('enc:')) {
+            const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(Buffer.from(stored.slice(4), 'base64'));
+            cachedApiKey = result;
+            // The OS key was rotated or upgraded: store the key again under the new one.
+            if (shouldReEncrypt) setSetting(KEYS.apiKey, await encryptKey(result));
+        } else if (stored.startsWith('plain:')) {
+            cachedApiKey = Buffer.from(stored.slice(6), 'base64').toString('utf8');
+        }
     } catch (error) {
         console.warn('[AI] Could not read the stored API key:', error);
     }
-    return null;
 }
 
 /** Trims and removes a trailing slash; keeps whatever version path the user gave. */
@@ -83,7 +95,7 @@ export function getAiConfig(): AiConfig {
         enabled: getSetting<boolean>(KEYS.enabled, false),
         baseUrl: normaliseBaseUrl(getSetting<string>(KEYS.baseUrl, AI_DEFAULTS.baseUrl)) || AI_DEFAULTS.baseUrl,
         model: getSetting<string>(KEYS.model, AI_DEFAULTS.model).trim() || AI_DEFAULTS.model,
-        apiKey: decryptKey(getSetting<string | null>(KEYS.apiKey, null)),
+        apiKey: cachedApiKey,
         autoEnrich: getSetting<boolean>(KEYS.autoEnrich, false),
         timeoutMs: getSetting<number>(KEYS.timeoutMs, AI_DEFAULTS.timeoutMs),
         embeddingModel: getSetting<string>(KEYS.embeddingModel, AI_DEFAULTS.embeddingModel).trim(),
@@ -103,15 +115,21 @@ export function getAiSettings(): AiSettings {
     };
 }
 
-export function updateAiSettings(update: AiSettingsUpdate): AiSettings {
+export async function updateAiSettings(update: AiSettingsUpdate): Promise<AiSettings> {
     if (update.enabled !== undefined) setSetting(KEYS.enabled, Boolean(update.enabled));
     if (update.baseUrl !== undefined) setSetting(KEYS.baseUrl, normaliseBaseUrl(update.baseUrl) || AI_DEFAULTS.baseUrl);
     if (update.model !== undefined) setSetting(KEYS.model, update.model.trim() || AI_DEFAULTS.model);
     if (update.embeddingModel !== undefined) setSetting(KEYS.embeddingModel, update.embeddingModel.trim());
     if (update.autoEnrich !== undefined) setSetting(KEYS.autoEnrich, Boolean(update.autoEnrich));
     if (update.timeoutMs !== undefined && Number.isFinite(update.timeoutMs)) setSetting(KEYS.timeoutMs, Math.max(5_000, Math.min(600_000, update.timeoutMs)));
-    if (update.apiKey === null) setSetting(KEYS.apiKey, null);
-    else if (typeof update.apiKey === 'string' && update.apiKey.trim()) setSetting(KEYS.apiKey, encryptKey(update.apiKey.trim()));
+    if (update.apiKey === null) {
+        setSetting(KEYS.apiKey, null);
+        cachedApiKey = null;
+    } else if (typeof update.apiKey === 'string' && update.apiKey.trim()) {
+        const key = update.apiKey.trim();
+        setSetting(KEYS.apiKey, await encryptKey(key));
+        cachedApiKey = key;
+    }
     return getAiSettings();
 }
 

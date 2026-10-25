@@ -8,6 +8,7 @@ import BulkActionsBar from './components/BulkActionsBar';
 import UpdateBanner from './components/UpdateBanner';
 import ToastHost from './components/ToastHost';
 import { describeError } from './lib/errors';
+import { APP_NAME } from './lib/brand';
 
 // Dialogs and the 3D viewer are loaded on first use so the library grid appears sooner.
 const ModelViewer = lazy(() => import('./components/ModelViewer'));
@@ -142,7 +143,7 @@ function App() {
                 className="h-12 bg-primary-card border-b border-accent-gray flex items-center justify-center px-20 flex-shrink-0 relative"
                 style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
             >
-                <span className="text-sm font-medium text-text-primary tracking-wide">Modelist</span>
+                <span className="text-sm font-medium text-text-primary tracking-wide">{APP_NAME}</span>
                 {!window.electronAPI && (
                     <div className="absolute right-4" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
                         <span className="text-xs text-red-400 bg-red-900/20 px-2 py-1 rounded border border-red-500/30">

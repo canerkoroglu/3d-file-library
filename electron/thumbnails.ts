@@ -1,7 +1,8 @@
 /**
- * Thumbnail rendering queue. The renderer process owns WebGL, so 3D previews are
- * rendered there one at a time on request from the main process. Results come back
- * as base64 PNG and are resized and stored next to the other thumbnails.
+ * Thumbnail rendering queue. 3D previews need WebGL, so they are rendered one at a time in a
+ * hidden window of their own (never the window the user is working in, so batches of renders do
+ * not compete with the interface). The window is created when there is work and closed again after
+ * a quiet period. Results come back as base64 PNG and are resized and stored with the other thumbnails.
  */
 import { BrowserWindow, ipcMain } from 'electron';
 import fs from 'fs';
@@ -13,6 +14,8 @@ import type { FileType, ThumbnailRenderRequest, ThumbnailRenderResult, Thumbnail
 const THUMBNAIL_SIZE = 512;
 const RENDER_TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 2;
+/** Close the hidden render window after this long without work, to give its memory back. */
+const IDLE_CLOSE_MS = 60_000;
 
 interface RenderJob {
     modelId: number;
@@ -22,6 +25,8 @@ interface RenderJob {
 }
 
 let window: BrowserWindow | null = null;
+let windowFactory: (() => BrowserWindow) | null = null;
+let idleTimer: NodeJS.Timeout | null = null;
 let rendererReady = false;
 let stopped = false;
 let nextJobId = 1;
@@ -37,6 +42,39 @@ let active: { jobId: number; job: RenderJob; timer: NodeJS.Timeout } | null = nu
 
 export function getThumbnailQueueSize(): number {
     return queue.length + (active ? 1 : 0);
+}
+
+/** Provides the function that creates the hidden render window (it needs the preload/page paths from main). */
+export function setThumbnailWindowFactory(factory: (() => BrowserWindow) | null): void {
+    windowFactory = factory;
+}
+
+function ensureWindow(): void {
+    if (stopped || !windowFactory || (window && !window.isDestroyed())) return;
+    const win = windowFactory();
+    setThumbnailWindow(win);
+    win.on('closed', () => {
+        if (window === win) setThumbnailWindow(null);
+        // Work left over (e.g. the window crashed) gets a fresh window.
+        if (!stopped && (queue.length > 0 || active)) setTimeout(ensureWindow, 1000);
+    });
+    win.webContents.on('render-process-gone', (_event, details) => {
+        console.error(`[Thumbnails] Render window stopped (${details.reason}); restarting it`);
+        if (!win.isDestroyed()) win.destroy();
+    });
+}
+
+function scheduleIdleClose(): void {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = null;
+    if (queue.length > 0 || active || !window) return;
+    idleTimer = setTimeout(() => {
+        idleTimer = null;
+        if (queue.length === 0 && !active && window && !window.isDestroyed()) {
+            console.log('[Thumbnails] Closing the idle render window');
+            window.destroy();
+        }
+    }, IDLE_CLOSE_MS);
 }
 
 export function setThumbnailWindow(win: BrowserWindow | null): void {
@@ -79,6 +117,11 @@ export function requestThumbnailRender(modelId: number, filepath: string, fileTy
     queue.push({ modelId, filepath, fileType, attempts: 0 });
     queuedIds.add(modelId);
     onQueueChange?.();
+    if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+    }
+    ensureWindow();
     drain();
 }
 
@@ -131,11 +174,14 @@ async function finish(jobId: number, result: ThumbnailRenderResult): Promise<voi
 
     onQueueChange?.();
     drain();
+    scheduleIdleClose();
 }
 
 /** Stops dispatching and ignores in-flight results; called before the database closes. */
 export function stopThumbnailQueue(): void {
     stopped = true;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = null;
     if (active) clearTimeout(active.timer);
     active = null;
     queue.length = 0;
@@ -143,12 +189,17 @@ export function stopThumbnailQueue(): void {
 }
 
 export function registerThumbnailIpc(): void {
-    ipcMain.on('thumbnail:ready', () => {
+    // Only the hidden render window may report; anything else is ignored.
+    const fromRenderWindow = (event: Electron.IpcMainEvent) => Boolean(window && !window.isDestroyed() && event.sender === window.webContents);
+    ipcMain.on('thumbnail:ready', (event) => {
+        if (!fromRenderWindow(event)) return;
         console.log(`[Thumbnails] Renderer ready (${queue.length} queued)`);
         rendererReady = true;
         drain();
+        scheduleIdleClose();
     });
-    ipcMain.on('thumbnail:rendered', (_event, result: ThumbnailRenderResult) => {
+    ipcMain.on('thumbnail:rendered', (event, result: ThumbnailRenderResult) => {
+        if (!fromRenderWindow(event)) return;
         void finish(result.jobId, result);
     });
 }

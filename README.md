@@ -1,6 +1,8 @@
-# Modelist
+# MeshVault
 
 A desktop library for 3D files (STL, OBJ, 3MF, GLB/glTF, USDZ and STEP). Point it at the folders where you keep your models and it keeps a searchable, thumbnailed catalogue of everything in them.
+
+> MeshVault was called *Modelist* up to v1.0.2. Existing libraries are picked up automatically, and installed copies update in place.
 
 ## Features
 
@@ -56,22 +58,28 @@ To host the server on a GPU box, `deploy/ai/` contains a Docker Compose stack (O
 
 ## Tech stack
 
-Electron, React 19, TypeScript, Three.js (react-three-fiber), Tailwind CSS, better-sqlite3 with FTS5, Zustand, Vite.
+Electron 45, React 19, TypeScript, Three.js (react-three-fiber), Tailwind CSS, better-sqlite3 13 with FTS5, Zustand, Vite 8.
 
 ## Development
 
 ```bash
-npm install      # also rebuilds native modules for Electron
+npm install      # native modules ship prebuilt Node-API binaries: no compiler or rebuild needed
 npm run dev      # Vite + Electron with hot reload
 npm run typecheck
 npm run lint
-npm test         # vitest unit tests (analyzers, query parser, SQL builder)
+npm test         # vitest unit tests (analyzers, query parser, database, indexer, ZIP import…)
 npm run e2e      # builds, then drives the real window through the scenarios in scripts/e2e
 ```
 
-The end-to-end suite generates a throwaway library (STL, OBJ, 3MF, a Thingiverse-style folder, a zip and enough files to page), starts the app with a temporary profile and controls it over the Chrome DevTools Protocol; no extra dependencies. `--no-build` reuses the last build, `--filter <text>` runs matching scenarios, `--keep` leaves the fixtures behind, and `MODELIST_APP=<executable>` points it at a packaged build. CI runs it on macOS.
+The end-to-end suite generates a throwaway library (STL, OBJ, 3MF, a Thingiverse-style folder, a zip and enough files to page), starts the app with a temporary profile and controls it over the Chrome DevTools Protocol; no extra dependencies. `--no-build` reuses the last build, `--filter <text>` runs matching scenarios, `--keep` leaves the fixtures behind, and `MESHVAULT_APP=<executable>` points it at a packaged build. CI runs it on macOS, Windows and Linux.
 
-Two environment variables help scripted setups: `MODELIST_USER_DATA=/path/to/profile` keeps a separate library, and `MODELIST_WATCH_FOLDERS=/a:/b` registers watched folders at startup.
+Environment variables for scripted setups (the older `MODELIST_*` names still work):
+
+- `MESHVAULT_USER_DATA=/path/to/profile` keeps a separate library.
+- `MESHVAULT_WATCH_FOLDERS=/a:/b` registers watched folders at startup.
+- `MESHVAULT_SOFTWARE_GL=1` renders WebGL in software, for machines without a usable GPU (CI, some VMs).
+
+The main-process log is written to `<user data>/logs/main.log` (Settings → About → Open log folder).
 
 ### Building
 
@@ -81,7 +89,7 @@ npm run build:win
 npm run build:linux
 ```
 
-Installers are written to `release/`. CI builds all three on every push to `main`.
+Installers are written to `release/`. CI builds all three on every push to `main`. The build settings live in `electron-builder.config.cjs`.
 
 ### Releases and auto-update
 
@@ -92,19 +100,21 @@ git push --follow-tags
 
 The tag triggers the release workflow, which builds macOS, Windows and Linux installers and uploads them to a **draft** GitHub release together with the update manifests. Publish the draft and installed copies pick it up: the app checks on launch and every six hours (switchable in Settings), shows a banner, downloads on request and installs on restart.
 
-macOS can only self-update when the app is code-signed; the CI build is unsigned, so on macOS the banner links to the release page instead. Sign locally (`npm run build:mac` with an Apple identity) to get in-place updates there.
+Release builds are code-signed when the signing secrets are configured in the repository, and unsigned otherwise; see [docs/code-signing.md](docs/code-signing.md). Unsigned macOS builds cannot update themselves, so there the banner links to the release page instead.
 
 ## Project structure
 
 ```
 electron/
-  main.ts              app lifecycle, window, media:// protocol
+  main.ts              app lifecycle, windows, media:// protocol, shutdown
+  modelProtocol.ts     model://library/<id> streams library files to the renderer
+  logger.ts            mirrors console output to logs/main.log
   preload.ts           context-bridge API exposed to the renderer
-  ipcHandlers.ts       thin IPC layer over library.ts
+  ipcHandlers.ts       thin IPC layer over the library, with argument checks
   database.ts          versioned SQLite migrations (PRAGMA user_version)
-  library.ts           queries, FTS index maintenance, imports, duplicates
+  library/             queries, FTS index, imports/missing files, updates, AI data, duplicates/similarity
   fileWatcher.ts       chokidar watchers + folder reconciliation
-  thumbnails.ts        render queue; the renderer draws 3D previews on request
+  thumbnails.ts        render queue; a hidden window draws 3D previews on request
   updater.ts           electron-updater wiring (GitHub releases)
   ai/provider.ts       OpenAI-compatible / Ollama client, settings, key storage
   ai/prompts.ts        prompt construction and reply validation
@@ -117,10 +127,13 @@ electron/
   indexer/worker.ts    utility process: hashing, mesh stats, sidecars, images
   analyzers/           STL / OBJ / 3MF / glTF parsers, sidecar discovery
 src/
-  components/          React UI (virtualised grid, viewer, sidebar, modals)
-  store/store.ts       Zustand state
+  components/          React UI (virtualised grid, sidebar, modals)
+  components/viewer/   3D viewer canvas and the side-panel sections
+  store/               Zustand state, one slice per area (library, selection, assistant…)
+  lib/modelLoader.ts   loads models via model:// and the mesh worker, disposes GPU resources
+  workers/meshWorker.ts parses STL / OBJ / STEP / multi-part 3MF off the UI thread
   lib/searchQuery.ts   query language parser (shared with the main process)
-  thumbnails/          off-screen Three.js thumbnail renderer
+  thumbnails/          Three.js thumbnail renderer (runs in the hidden render window)
 tests/                 vitest unit tests
 scripts/e2e/           end-to-end runner, fixtures and scenarios
 deploy/ai/             Docker Compose (Ollama) GPU stack for the AI backend
@@ -130,7 +143,7 @@ deploy/ai/             Docker Compose (Ollama) GPU stack for the AI backend
 
 1. A watched folder is scanned (or the watcher reports a change) and `importModel` inserts a row and its FTS document.
 2. The indexer queue sends the model to the worker, which hashes the file, parses geometry and metadata, looks for sidecars and writes any embedded or sidecar preview as the thumbnail.
-3. The main process applies the result, refreshes the FTS document and, if the model still has no good preview, asks the renderer to draw one.
+3. The main process applies the result, refreshes the FTS document and, if the model still has no good preview, asks the hidden render window to draw one (the window opens when there is work and closes after a minute idle).
 4. The renderer is notified (debounced) and reloads the current view.
 
 Thumbnail sources are ranked so a stronger preview is never replaced by a weaker one: user capture > embedded 3MF image > matching sidecar image > 3D render > generic folder image.

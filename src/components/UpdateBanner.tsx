@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Download, RefreshCw, X, ExternalLink, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useStore } from '../store/store';
+import { APP_NAME } from '../lib/brand';
 
 /** Bottom-right card that appears when a newer version is available, downloading or ready. */
 export default function UpdateBanner() {
@@ -20,7 +21,7 @@ export default function UpdateBanner() {
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-text-primary">
-                        {state === 'downloaded' ? `Modelist ${version} is ready` : `Modelist ${version} is available`}
+                        {state === 'downloaded' ? `${APP_NAME} ${version} is ready` : `${APP_NAME} ${version} is available`}
                     </div>
                     <div className="text-xs text-text-secondary">
                         {state === 'downloading'

@@ -8,6 +8,11 @@ export default tseslint.config(
     js.configs.recommended,
     ...tseslint.configs.recommended,
     {
+        // CommonJS config files (electron-builder).
+        files: ['**/*.cjs'],
+        languageOptions: { sourceType: 'commonjs', globals: globals.node },
+    },
+    {
         // Plain Node scripts (end-to-end runner). fetch and WebSocket are Node 22 globals.
         files: ['scripts/**/*.mjs'],
         languageOptions: {

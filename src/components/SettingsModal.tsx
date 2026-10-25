@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw, FileX, ExternalLink, Plus, Trash2, Download, Loader2, FileText } from 'lucide-react';
 import { useStore } from '../store/store';
+import { APP_NAME } from '../lib/brand';
 import { ConfirmDialog } from './ConfirmDialog';
 import AiSettingsSection from './AiSettingsSection';
 import PrinterBedSection from './PrinterBedSection';
@@ -235,7 +236,7 @@ export default function SettingsModal() {
                                 <SettingsIcon size={32} className="text-white" />
                             </div>
                             <div>
-                                <h4 className="text-lg font-semibold text-text-primary">Modelist</h4>
+                                <h4 className="text-lg font-semibold text-text-primary">{APP_NAME}</h4>
                                 <p className="text-text-secondary text-sm" data-testid="app-version">Version {updateStatus?.currentVersion ?? '…'}</p>
                                 <p className="text-text-secondary text-sm max-w-sm mx-auto pt-2">
                                     An offline-first 3D model organizer and viewer for STL, 3MF and OBJ files with collections, tags, full-text search and a 3D preview.

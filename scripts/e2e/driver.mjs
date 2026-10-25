@@ -16,7 +16,8 @@ async function findPage(port, timeoutMs) {
     while (Date.now() - started < timeoutMs) {
         try {
             const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
-            const page = targets.find((t) => t.type === 'page' && !t.url.startsWith('devtools://'));
+            // Skip DevTools and the hidden thumbnail-rendering window.
+            const page = targets.find((t) => t.type === 'page' && !t.url.startsWith('devtools://') && !t.url.includes('#thumbnail-renderer'));
             if (page) return page;
         } catch {
             // not listening yet
@@ -36,13 +37,16 @@ export async function launchApp(options) {
     const args = options.appPath
         ? [`--remote-debugging-port=${port}`]
         : [path.join(PROJECT_ROOT, 'dist-electron', 'main.js'), `--remote-debugging-port=${port}`];
+    // Linux CI runners restrict the namespaces Chromium's sandbox needs; the test app runs trusted local code.
+    if (process.platform === 'linux' && process.env.CI) args.push('--no-sandbox');
 
     const logFile = options.logFile ?? path.join(options.profileDir, 'app.log');
     const child = spawn(electronPath, args, {
         env: {
             ...process.env,
-            MODELIST_USER_DATA: options.profileDir,
-            MODELIST_WATCH_FOLDERS: (options.watchFolders ?? []).join(path.delimiter),
+            MESHVAULT_USER_DATA: options.profileDir,
+            MESHVAULT_SOFTWARE_GL: process.env.MESHVAULT_SOFTWARE_GL ?? '',
+            MESHVAULT_WATCH_FOLDERS: (options.watchFolders ?? []).join(path.delimiter),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
     });

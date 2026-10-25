@@ -1,11 +1,12 @@
-# Modelist AI backend: a GPU-accelerated, OpenAI-compatible LLM server (Ollama).
-# Serves the chat model AND the embedding model Modelist's "Similar models" uses.
+# MeshVault AI backend: a GPU-accelerated, OpenAI-compatible LLM server (Ollama).
+# Serves the chat model AND the embedding model MeshVault's "Similar models" uses.
 #
 #   cp .env.example .env      # optional: change models/port
 #   docker compose up -d      # starts the server and pulls the models
 #
 # Requires: NVIDIA driver on the host + nvidia-container-toolkit (see README.md).
 
+# Project and container names keep their original "modelist" prefix so existing deployments are reused.
 name: modelist-ai
 
 services:
@@ -34,7 +35,7 @@ services:
       timeout: 5s
       retries: 12
 
-  # One-shot: waits for the server, pulls the models Modelist needs, then exits.
+  # One-shot: waits for the server, pulls the models MeshVault needs, then exits.
   model-puller:
     image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
     depends_on:

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import type { FileType } from '../types';
-import { disposeMaterials, disposeObject, loadModelObject } from '../lib/modelLoader';
+import { disposeMaterials, disposeObject, loadModel } from '../lib/modelLoader';
 
 export interface ViewerDisplayOptions {
     wireframe: boolean;
@@ -13,10 +13,14 @@ export interface ViewerDisplayOptions {
 }
 
 interface GenericModelProps {
-    filepath: string;
+    modelId: number;
+    /** Lets very large files take the background parser straight away. */
+    fileSize?: number;
     fileType: FileType;
     options: ViewerDisplayOptions;
     onError?: (message: string) => void;
+    /** Called once the model has been parsed and is on screen. */
+    onLoaded?: () => void;
 }
 
 const TARGET_SIZE = 5;
@@ -85,7 +89,7 @@ function releasePrepared(prepared: Prepared): void {
     for (const original of prepared.originalMaterials.values()) disposeMaterials(original);
 }
 
-export default function GenericModel({ filepath, fileType, options, onError }: GenericModelProps) {
+export default function GenericModel({ modelId, fileSize, fileType, options, onError, onLoaded }: GenericModelProps) {
     const [prepared, setPrepared] = useState<Prepared | null>(null);
     const uniformMaterial = useMemo(() => makeMaterial(options.uniformColor), [options.uniformColor]);
     const clipPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 0), []);
@@ -96,17 +100,16 @@ export default function GenericModel({ filepath, fileType, options, onError }: G
 
         const load = async () => {
             try {
-                const buffer = await window.electronAPI.readFileAsBuffer(filepath);
-                if (cancelled) return;
-                const raw = await loadModelObject(buffer, fileType, () => makeMaterial('#3b82f6'));
+                const raw = await loadModel(modelId, fileType, () => makeMaterial('#3b82f6'), fileSize);
                 if (cancelled) {
                     disposeObject(raw);
                     return;
                 }
                 loaded = prepare(raw);
                 setPrepared(loaded);
+                onLoaded?.();
             } catch (error) {
-                console.error('Failed to load model:', filepath, error);
+                console.error('Failed to load model:', modelId, error);
                 if (!cancelled) onError?.(error instanceof Error ? error.message : 'Failed to load model');
             }
         };
@@ -117,7 +120,7 @@ export default function GenericModel({ filepath, fileType, options, onError }: G
             if (loaded) releasePrepared(loaded);
             setPrepared(null);
         };
-    }, [filepath, fileType, onError]);
+    }, [modelId, fileSize, fileType, onError, onLoaded]);
 
     // Apply display options to every mesh whenever they change.
     useEffect(() => {

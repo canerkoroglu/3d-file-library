@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import type { FileType, ThumbnailRenderRequest } from '../types';
-import { disposeObject, loadModelObject } from '../lib/modelLoader';
+import { disposeObject, loadModel } from '../lib/modelLoader';
 
 const SIZE = 512;
 const BACKGROUND = 0x232323;
@@ -34,9 +34,8 @@ function orient(object: THREE.Object3D): THREE.Group {
     return group;
 }
 
-export async function renderThumbnail(filepath: string, fileType: FileType): Promise<string> {
-    const buffer = await window.electronAPI.readFileAsBuffer(filepath);
-    const object = await loadModelObject(buffer, fileType, () => new THREE.MeshStandardMaterial({ color: MODEL_COLOR, roughness: 0.55, metalness: 0.05 }));
+export async function renderThumbnail(modelId: number, fileType: FileType): Promise<string> {
+    const object = await loadModel(modelId, fileType, () => new THREE.MeshStandardMaterial({ color: MODEL_COLOR, roughness: 0.55, metalness: 0.05 }));
     const gl = getRenderer();
 
     const scene = new THREE.Scene();
@@ -81,7 +80,7 @@ export function startThumbnailRenderer(): () => void {
 
     const unsubscribe = api.onThumbnailRender(async (request: ThumbnailRenderRequest) => {
         try {
-            const imageData = await renderThumbnail(request.filepath, request.fileType);
+            const imageData = await renderThumbnail(request.modelId, request.fileType);
             api.sendThumbnailResult({ jobId: request.jobId, ok: true, imageData });
         } catch (error) {
             api.sendThumbnailResult({

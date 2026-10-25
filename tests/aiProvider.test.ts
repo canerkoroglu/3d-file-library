@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // provider.ts imports Electron's safeStorage and the settings store; neither is needed for the parsing helpers.
-vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false, encryptString: () => Buffer.from(''), decryptString: () => '' } }));
+vi.mock('electron', () => ({ safeStorage: { isAsyncEncryptionAvailable: async () => false, encryptStringAsync: async () => Buffer.from(''), decryptStringAsync: async () => ({ result: '', shouldReEncrypt: false }) } }));
 vi.mock('../electron/settings', () => ({ getSetting: (_k: string, fallback: unknown) => fallback, setSetting: () => {} }));
 
 const { extractJson, stripThinking, normaliseBaseUrl } = await import('../electron/ai/provider');

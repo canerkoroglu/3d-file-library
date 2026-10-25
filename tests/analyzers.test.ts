@@ -55,7 +55,7 @@ function writeAsciiStl(file: string, triangles: number[][]): void {
 }
 
 beforeAll(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modelist-test-'));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meshvault-test-'));
 });
 
 afterAll(() => {
@@ -173,7 +173,7 @@ describe('3MF analyzer', () => {
         const zip = new JSZip();
         for (const [name, content] of Object.entries(files)) zip.file(name, content);
         const buffer = await zip.generateAsync({ type: 'nodebuffer' });
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modelist-3mf-'));
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meshvault-3mf-'));
         const filepath = path.join(dir, 'model.3mf');
         fs.writeFileSync(filepath, buffer);
         try {
@@ -320,7 +320,7 @@ describe('GLB analyzer', () => {
         return Buffer.concat([header, chunkHeader, jsonPadded]);
     }
     async function analyzeTemp(name: string, content: Buffer | string) {
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modelist-glb-'));
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'meshvault-glb-'));
         const fp = path.join(dir, name);
         fs.writeFileSync(fp, content);
         try {

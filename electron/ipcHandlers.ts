@@ -79,16 +79,6 @@ function windowFor(event: IpcMainInvokeEvent): BrowserWindow | undefined {
 export function setupIpcHandlers(): void {
     const db = getDatabase();
 
-    // ============ Files ============
-
-    handle<ArrayBuffer>('read-file-as-buffer', async (_event, filepath: string) => {
-        // Only files that are part of the library may be read by the renderer.
-        const known = db.prepare('SELECT 1 FROM models WHERE filepath = ?').get(filepath);
-        if (!known) throw new Error('File is not part of the library');
-        const buffer = await fs.promises.readFile(filepath);
-        return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-    });
-
     // ============ Models ============
 
     handle('get-models', (_event, filters?: FilterOptions) => getModelsPage(filters));
