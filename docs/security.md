@@ -59,4 +59,4 @@ decrypted only in the main process. It is only sent to the server address saved 
 
 ## Reporting a problem
 
-Please open a private security advisory on the GitHub repository rather than a public issue.
+Please report vulnerabilities privately, as described in [SECURITY.md](../SECURITY.md).
