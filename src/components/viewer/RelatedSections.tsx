@@ -25,9 +25,9 @@ export function SimilarSection({ model }: { model: ModelWithTags }) {
                 {similar.map((m) => (
                     <button key={m.id} onClick={() => openViewer(m)} className="flex items-center gap-2 p-2 bg-primary-bg rounded-lg border border-accent-gray hover:border-accent-blue text-left min-w-0">
                         {thumbnailUrl(m) ? (
-                            <img src={thumbnailUrl(m)!} alt="" className="w-10 h-10 rounded object-cover bg-primary-card flex-shrink-0" />
+                            <img src={thumbnailUrl(m)!} alt="" className="w-10 h-10 rounded-sm object-cover bg-primary-card shrink-0" />
                         ) : (
-                            <div className="w-10 h-10 rounded bg-primary-card flex items-center justify-center flex-shrink-0"><Box size={16} className="text-text-secondary" /></div>
+                            <div className="w-10 h-10 rounded-sm bg-primary-card flex items-center justify-center shrink-0"><Box size={16} className="text-text-secondary" /></div>
                         )}
                         <span className="text-xs text-text-primary truncate">{m.displayName || m.filename}</span>
                     </button>
@@ -56,7 +56,7 @@ export function ReadmeSection({ model }: { model: ModelWithTags }) {
                 <FileText size={14} /> README
             </button>
             {open && (
-                <pre className="text-xs text-text-primary bg-primary-bg rounded-lg p-3 whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-sans">
+                <pre className="text-xs text-text-primary bg-primary-bg rounded-lg p-3 whitespace-pre-wrap wrap-break-word max-h-64 overflow-y-auto font-sans">
                     {readme ?? 'Loading…'}
                 </pre>
             )}

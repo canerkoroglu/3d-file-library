@@ -16,7 +16,7 @@ export default function UpdateBanner() {
     return (
         <div className="fixed bottom-6 right-6 w-80 bg-primary-card border border-accent-gray rounded-xl shadow-2xl p-4 z-40 space-y-3" data-testid="update-banner">
             <div className="flex items-start gap-3">
-                <div className="p-2 bg-accent-blue/10 rounded-lg text-accent-blue flex-shrink-0">
+                <div className="p-2 bg-accent-blue/10 rounded-lg text-accent-blue shrink-0">
                     <Sparkles size={18} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -34,14 +34,14 @@ export default function UpdateBanner() {
                     </div>
                 </div>
                 {state !== 'downloading' && (
-                    <button onClick={dismissUpdateBanner} className="p-1 rounded hover:bg-primary-hover text-text-secondary hover:text-text-primary" title="Later">
+                    <button onClick={dismissUpdateBanner} className="p-1 rounded-sm hover:bg-primary-hover text-text-secondary hover:text-text-primary" title="Later">
                         <X size={16} />
                     </button>
                 )}
             </div>
 
             {state === 'downloading' && (
-                <div className="h-1.5 bg-primary-bg rounded overflow-hidden">
+                <div className="h-1.5 bg-primary-bg rounded-sm overflow-hidden">
                     <div className="h-full bg-accent-blue transition-all duration-300" style={{ width: `${Math.max(2, progress?.percent ?? 0)}%` }} />
                 </div>
             )}

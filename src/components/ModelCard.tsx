@@ -84,8 +84,8 @@ export default function ModelCard({ model, viewMode, index, selected, selectionA
                 className={`model-card group w-full h-full p-3 flex items-center gap-4 hover:border-accent-blue ${missing ? 'opacity-60' : ''} ${selectedRing}`}
                 title={missingTitle}
             >
-                <div className="flex-shrink-0">{checkbox}</div>
-                <div className="w-14 h-14 bg-primary-bg rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                <div className="shrink-0">{checkbox}</div>
+                <div className="w-14 h-14 bg-primary-bg rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
                     {showImage ? (
                         <img src={src} alt={model.filename} className="w-full h-full object-cover" onError={() => setImgError(true)} loading="lazy" />
                     ) : icon}
@@ -94,7 +94,7 @@ export default function ModelCard({ model, viewMode, index, selected, selectionA
                     <div className="font-medium text-sm truncate">{model.displayName || model.filename}</div>
                     <div className="text-xs text-text-secondary truncate mt-0.5">{model.folderPath}</div>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-text-secondary flex-shrink-0 tabular-nums">
+                <div className="flex items-center gap-4 text-xs text-text-secondary shrink-0 tabular-nums">
                     {missing && (
                         <span className="flex items-center gap-1 text-red-400 font-medium">
                             <FileX size={12} /> Missing
@@ -128,12 +128,12 @@ export default function ModelCard({ model, viewMode, index, selected, selectionA
                 {(missing || oversized) && (
                     <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
                         {missing && (
-                            <div className="px-2 py-0.5 bg-red-500/85 backdrop-blur-sm rounded text-[10px] font-bold text-white uppercase flex items-center gap-1">
+                            <div className="px-2 py-0.5 bg-red-500/85 backdrop-blur-xs rounded-sm text-[10px] font-bold text-white uppercase flex items-center gap-1">
                                 <FileX size={10} /> Missing
                             </div>
                         )}
                         {oversized && (
-                            <div className="px-2 py-0.5 bg-amber-500/85 backdrop-blur-sm rounded text-[10px] font-bold text-white uppercase flex items-center gap-1" title="Larger than your printer bed">
+                            <div className="px-2 py-0.5 bg-amber-500/85 backdrop-blur-xs rounded-sm text-[10px] font-bold text-white uppercase flex items-center gap-1" title="Larger than your printer bed">
                                 <AlertTriangle size={10} /> Exceeds bed
                             </div>
                         )}
@@ -147,18 +147,18 @@ export default function ModelCard({ model, viewMode, index, selected, selectionA
                     <div className="w-full h-full flex items-center justify-center">{icon}</div>
                 )}
 
-                <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-sm rounded text-[10px] font-bold text-white uppercase">
+                <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-xs rounded-sm text-[10px] font-bold text-white uppercase">
                     {model.fileType}
                 </div>
 
                 <div className="absolute bottom-2 right-2 flex items-center gap-1">
                     {model.hasReadme && (
-                        <div className="p-1 bg-black/60 backdrop-blur-sm rounded text-white" title="Has README">
+                        <div className="p-1 bg-black/60 backdrop-blur-xs rounded-sm text-white" title="Has README">
                             <FileText size={10} />
                         </div>
                     )}
                     {model.sourceMetadata?.source && (
-                        <div className="px-2 py-0.5 bg-blue-500/80 backdrop-blur-sm rounded text-[10px] font-semibold text-white">
+                        <div className="px-2 py-0.5 bg-blue-500/80 backdrop-blur-xs rounded-sm text-[10px] font-semibold text-white">
                             {model.sourceMetadata.source}
                         </div>
                     )}
@@ -172,7 +172,7 @@ export default function ModelCard({ model, viewMode, index, selected, selectionA
                 <div className="text-xs text-text-secondary flex items-center justify-between gap-2 tabular-nums">
                     <span className="truncate">{model.bbox ? formatDimensions(model.bbox) : formatFileSize(model.fileSize)}</span>
                     {model.tags.length > 0 && (
-                        <span className="flex items-center gap-1 flex-shrink-0">
+                        <span className="flex items-center gap-1 shrink-0">
                             {model.tags.slice(0, 3).map((tag) => (
                                 <span key={tag.id} className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} title={tag.name} />
                             ))}

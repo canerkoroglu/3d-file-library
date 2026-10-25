@@ -24,7 +24,7 @@ function GroupCard({ index, badge, size, models, onDelete }: {
         <div className="bg-primary-bg rounded-lg border border-accent-gray overflow-hidden">
             <div className="bg-primary-hover px-4 py-2 border-b border-accent-gray flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono bg-primary-card px-2 py-0.5 rounded text-text-secondary">Group #{index + 1}</span>
+                    <span className="text-xs font-mono bg-primary-card px-2 py-0.5 rounded-sm text-text-secondary">Group #{index + 1}</span>
                     <span className="text-xs text-text-secondary">Size: {formatSize(size)}</span>
                 </div>
                 <div className="text-xs text-yellow-500 font-medium">{badge}</div>
@@ -35,15 +35,15 @@ function GroupCard({ index, badge, size, models, onDelete }: {
                     <div key={model.id} className="p-4 flex items-center justify-between group hover:bg-primary-hover transition-colors">
                         <div className="flex items-center gap-4 min-w-0 flex-1">
                             {thumbnailUrl(model) ? (
-                                <img src={thumbnailUrl(model)!} alt={model.filename} className="w-10 h-10 rounded object-cover bg-primary-card" />
+                                <img src={thumbnailUrl(model)!} alt={model.filename} className="w-10 h-10 rounded-sm object-cover bg-primary-card" />
                             ) : (
-                                <div className="w-10 h-10 rounded bg-primary-card flex items-center justify-center text-text-secondary"><File size={16} /></div>
+                                <div className="w-10 h-10 rounded-sm bg-primary-card flex items-center justify-center text-text-secondary"><File size={16} /></div>
                             )}
                             <div className="min-w-0 flex-1">
                                 <h4 className="text-sm font-medium text-text-primary truncate" title={model.filename}>{model.filename}</h4>
                                 <div className="flex items-center gap-2 text-xs text-text-secondary mt-0.5">
                                     <span className="truncate" title={model.filepath}>{model.filepath.replace(model.filename, '')}</span>
-                                    <span className="flex-shrink-0 px-1.5 py-0.5 rounded-full bg-primary-card text-[10px]">{model.fileType.toUpperCase()}</span>
+                                    <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-primary-card text-[10px]">{model.fileType.toUpperCase()}</span>
                                 </div>
                             </div>
                         </div>
@@ -52,7 +52,7 @@ function GroupCard({ index, badge, size, models, onDelete }: {
                             <div className="text-right text-xs text-text-secondary">{format(new Date(model.createdAt), 'MMM d, yyyy')}</div>
                             <button
                                 onClick={() => onDelete(model.id)}
-                                className="w-8 h-8 flex items-center justify-center rounded hover:bg-red-500/20 text-text-secondary hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                className="w-8 h-8 flex items-center justify-center rounded-sm hover:bg-red-500/20 text-text-secondary hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                                 title="Delete file"
                             >
                                 <Trash2 size={16} />
@@ -83,10 +83,10 @@ const DuplicatesModal = () => {
     const nothing = duplicateGroups.length === 0 && nearDuplicateGroups.length === 0;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
             <div className="bg-primary-card w-full max-w-4xl h-[80vh] rounded-xl flex flex-col shadow-2xl border border-accent-gray">
                 {/* Header */}
-                <div className="h-16 border-b border-accent-gray flex items-center justify-between px-6 flex-shrink-0">
+                <div className="h-16 border-b border-accent-gray flex items-center justify-between px-6 shrink-0">
                     <div className="flex items-center gap-3">
                         <AlertTriangle className="text-yellow-500" size={24} />
                         <div>
@@ -152,7 +152,7 @@ const DuplicatesModal = () => {
                 </div>
 
                 {/* Footer */}
-                <div className="h-16 border-t border-accent-gray flex items-center justify-between px-6 bg-primary-hover flex-shrink-0 rounded-b-xl text-sm">
+                <div className="h-16 border-t border-accent-gray flex items-center justify-between px-6 bg-primary-hover shrink-0 rounded-b-xl text-sm">
                     <div className="text-text-secondary">
                         {duplicateGroups.length > 0 && <span>Keep one file from each exact group to reclaim space. </span>}
                         {wastedSpace && wastedSpace.unhashedCount > 0 && (

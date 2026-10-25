@@ -18,7 +18,7 @@ export default function ViewerActions({ model, missing }: { model: ModelWithTags
     };
 
     return (
-        <div className="p-4 border-t border-accent-gray space-y-2 flex-shrink-0 bg-primary-card">
+        <div className="p-4 border-t border-accent-gray space-y-2 shrink-0 bg-primary-card">
             <div className="relative">
                 <div className="flex">
                     <button
@@ -68,7 +68,7 @@ export default function ViewerActions({ model, missing }: { model: ModelWithTags
             </div>
             {slicerError && (
                 <div className="text-xs text-red-400 flex items-start gap-1.5">
-                    <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" /> {slicerError}
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {slicerError}
                 </div>
             )}
             <button

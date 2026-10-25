@@ -57,7 +57,7 @@ export default function FilterBar() {
     };
 
     return (
-        <div className="bg-primary-card border-b border-accent-gray px-4 py-3 space-y-3 flex-shrink-0">
+        <div className="bg-primary-card border-b border-accent-gray px-4 py-3 space-y-3 shrink-0">
             <div className="flex items-center gap-3">
                 {/* Search */}
                 <div className="flex-1 relative">
@@ -176,14 +176,14 @@ export default function FilterBar() {
                 <div className="flex items-center bg-primary-bg rounded-lg p-1 border border-accent-gray">
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`p-1.5 rounded transition-all duration-200 ${viewMode === 'grid' ? 'bg-accent-blue text-white shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-primary-hover'}`}
+                        className={`p-1.5 rounded-sm transition-all duration-200 ${viewMode === 'grid' ? 'bg-accent-blue text-white shadow-xs' : 'text-text-secondary hover:text-text-primary hover:bg-primary-hover'}`}
                         title="Grid view"
                     >
                         <Grid size={16} />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`p-1.5 rounded transition-all duration-200 ${viewMode === 'list' ? 'bg-accent-blue text-white shadow-sm' : 'text-text-secondary hover:text-text-primary hover:bg-primary-hover'}`}
+                        className={`p-1.5 rounded-sm transition-all duration-200 ${viewMode === 'list' ? 'bg-accent-blue text-white shadow-xs' : 'text-text-secondary hover:text-text-primary hover:bg-primary-hover'}`}
                         title="List view"
                     >
                         <List size={16} />
@@ -193,7 +193,7 @@ export default function FilterBar() {
 
             {lastTranslation && (
                 <div className="flex items-center gap-2 text-xs text-text-secondary" data-testid="translation-chip">
-                    <Sparkles size={12} className="text-accent-blue flex-shrink-0" />
+                    <Sparkles size={12} className="text-accent-blue shrink-0" />
                     <span className="truncate">
                         "{lastTranslation.input}" → <code className="font-mono text-text-primary">{lastTranslation.query}</code>
                         {lastTranslation.explanation && <span className="ml-1 italic">({lastTranslation.explanation})</span>}
@@ -206,7 +206,7 @@ export default function FilterBar() {
 
             {tags.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] text-text-secondary font-bold uppercase tracking-wider flex-shrink-0">Filter:</span>
+                    <span className="text-[10px] text-text-secondary font-bold uppercase tracking-wider shrink-0">Filter:</span>
                     {tags.map((tag) => {
                         const isSelected = selectedTags.includes(tag.id);
                         return (

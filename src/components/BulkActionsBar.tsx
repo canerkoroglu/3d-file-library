@@ -61,9 +61,9 @@ export default function BulkActionsBar() {
                         setOpenMenu(null);
                         item.onSelect();
                     }}
-                    className="w-full text-left px-3 py-2 rounded hover:bg-primary-hover transition-colors flex items-center gap-2 text-sm text-text-primary"
+                    className="w-full text-left px-3 py-2 rounded-sm hover:bg-primary-hover transition-colors flex items-center gap-2 text-sm text-text-primary"
                 >
-                    {item.color && <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />}
+                    {item.color && <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />}
                     <span className="truncate">{item.label}</span>
                 </button>
             ))}
@@ -90,7 +90,7 @@ export default function BulkActionsBar() {
                 className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-primary-card border border-accent-gray rounded-xl shadow-2xl px-4 py-3 flex items-center gap-3 z-40 animate-slide-up"
             >
                 <div className="flex items-center gap-2 pr-3 border-r border-accent-gray">
-                    <div className="min-w-6 h-6 px-1.5 bg-accent-blue rounded flex items-center justify-center">
+                    <div className="min-w-6 h-6 px-1.5 bg-accent-blue rounded-sm flex items-center justify-center">
                         <span className="text-xs font-bold text-white tabular-nums">{selectedCount}</span>
                     </div>
                     <span className="text-sm font-medium text-text-primary whitespace-nowrap">selected</span>

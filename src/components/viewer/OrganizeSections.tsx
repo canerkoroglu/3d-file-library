@@ -23,11 +23,11 @@ export function CollectionsSection({ model }: { model: ModelWithTags }) {
             <h3 className="text-sm font-semibold mb-3 text-text-primary">Collections</h3>
             <div className="bg-primary-bg rounded-lg border border-accent-gray p-2 max-h-40 overflow-y-auto space-y-1">
                 {userCollections.map((c) => (
-                    <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-primary-hover rounded cursor-pointer select-none">
+                    <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-primary-hover rounded-sm cursor-pointer select-none">
                         <input
                             type="checkbox"
                             checked={model.collectionIds.includes(c.id)}
-                            className="w-4 h-4 rounded accent-blue-500"
+                            className="w-4 h-4 rounded-sm accent-blue-500"
                             onChange={(e) => toggleCollection(c.id, e.target.checked)}
                         />
                         <span className="text-text-primary text-sm">{c.name}</span>
@@ -87,7 +87,7 @@ export function TagsSection({ model }: { model: ModelWithTags }) {
                         + New Tag
                     </button>
                 ) : (
-                    <div className="flex items-center gap-2 bg-primary-bg p-1 rounded border border-accent-blue">
+                    <div className="flex items-center gap-2 bg-primary-bg p-1 rounded-sm border border-accent-blue">
                         <input
                             autoFocus
                             type="text"
@@ -102,13 +102,13 @@ export function TagsSection({ model }: { model: ModelWithTags }) {
                                 }
                             }}
                             placeholder="Tag name…"
-                            className="bg-transparent text-text-primary text-xs w-20 focus:outline-none"
+                            className="bg-transparent text-text-primary text-xs w-20 focus:outline-hidden"
                         />
                         <input
                             type="color"
                             value={newTagColor}
                             onChange={(e) => setNewTagColor(e.target.value)}
-                            className="w-4 h-4 rounded cursor-pointer border-none p-0 bg-transparent"
+                            className="w-4 h-4 rounded-sm cursor-pointer border-none p-0 bg-transparent"
                             title="Choose color"
                         />
                         <button onClick={handleCreateTag} className="text-accent-blue hover:text-text-primary transition-colors">

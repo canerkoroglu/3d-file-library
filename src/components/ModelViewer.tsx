@@ -34,14 +34,14 @@ export default function ModelViewer() {
 
     return (
         <div
-            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200"
+            className="fixed inset-0 bg-black/90 backdrop-blur-xs z-50 flex items-center justify-center p-6 animate-in fade-in duration-200"
             onClick={(e) => {
                 if (e.target === e.currentTarget) closeViewer();
             }}
         >
             <div className="bg-primary-card rounded-xl w-full h-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden border border-accent-gray shadow-2xl">
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-accent-gray flex-shrink-0 bg-primary-card">
+                <div className="flex items-center justify-between p-4 border-b border-accent-gray shrink-0 bg-primary-card">
                     <div className="flex-1 min-w-0">
                         <h2 className="text-lg font-semibold truncate">{selectedModel.displayName || selectedModel.filename}</h2>
                         <p className="text-sm text-text-secondary mt-0.5 truncate">
@@ -50,7 +50,7 @@ export default function ModelViewer() {
                             {selectedModel.bbox && ` · ${formatDimensions(selectedModel.bbox)}`}
                         </p>
                     </div>
-                    <button onClick={closeViewer} className="ml-4 p-2 hover:bg-primary-hover rounded-lg transition-colors flex-shrink-0" title="Close (Esc)">
+                    <button onClick={closeViewer} className="ml-4 p-2 hover:bg-primary-hover rounded-lg transition-colors shrink-0" title="Close (Esc)">
                         <X size={20} />
                     </button>
                 </div>
@@ -77,7 +77,7 @@ export default function ModelViewer() {
                     </div>
 
                     {/* Side panel */}
-                    <div className="w-80 bg-primary-card border-l border-accent-gray flex flex-col overflow-hidden flex-shrink-0">
+                    <div className="w-80 bg-primary-card border-l border-accent-gray flex flex-col overflow-hidden shrink-0">
                         <div className="flex-1 overflow-y-auto p-4 space-y-6">
                             <FileSection key={`file-${key}`} model={selectedModel} missing={missing} />
                             <GeometrySection model={selectedModel} />

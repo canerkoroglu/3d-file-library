@@ -107,7 +107,7 @@ export default function AiSettingsSection() {
                             The assistant describes and categorises models for search, suggests tags, and turns plain-language questions into searches.
                         </div>
                     </div>
-                    <label className="flex items-center gap-2 text-sm text-text-primary select-none cursor-pointer flex-shrink-0">
+                    <label className="flex items-center gap-2 text-sm text-text-primary select-none cursor-pointer shrink-0">
                         <input
                             type="checkbox"
                             checked={aiSettings.enabled}

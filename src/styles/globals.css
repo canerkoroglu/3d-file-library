@@ -1,43 +1,205 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  Theme colours. Components use classes such as bg-primary-card; the actual values live in the
+  --mv-* variables below so they can switch between light and dark at runtime.
+*/
+@theme inline {
+  --color-primary-bg: var(--mv-primary-bg);
+  --color-primary-card: var(--mv-primary-card);
+  --color-primary-hover: var(--mv-primary-hover);
+
+  --color-accent-blue: var(--mv-accent-blue);
+  --color-accent-gray: var(--mv-accent-gray);
+  --color-accent-hover: var(--mv-accent-hover);
+
+  --color-text-primary: var(--mv-text-primary);
+  --color-text-secondary: var(--mv-text-secondary);
+  --color-text-inverse: var(--mv-text-inverse);
+}
+
+@theme {
+  --color-tag-draft: #fbbf24;
+  --color-tag-final: #60a5fa;
+  --color-tag-multicolor: #a78bfa;
+  --color-tag-printnext: #fb923c;
+  --color-tag-printed: #4ade80;
+  --color-tag-prototype: #f472b6;
+  --color-tag-urgent: #f87171;
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility card {
+  /* Card component */
+  @apply bg-primary-card rounded-lg border border-accent-gray overflow-hidden;
+
+  &:hover {
+    @apply border-accent-blue;
+  }
+}
+
+@utility btn {
+  /* Buttons */
+  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2;
+}
+
+@utility btn-primary {
+  @apply bg-accent-blue text-white hover:bg-blue-600 active:scale-[0.98];
+}
+
+@utility btn-secondary {
+  @apply bg-primary-card text-text-primary border border-accent-gray hover:bg-primary-hover hover:border-accent-hover;
+}
+
+@utility btn-ghost {
+  @apply text-text-primary hover:bg-primary-hover;
+}
+
+@utility input {
+  /* Input fields */
+  @apply w-full bg-primary-bg border border-accent-gray rounded-lg px-4 py-2 text-text-primary placeholder:text-text-secondary transition-colors;
+
+  &:focus {
+    @apply border-accent-blue ring-1 ring-accent-blue;
+  }
+}
+
+@utility tag {
+  /* Tags */
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold cursor-pointer transition-all duration-200;
+
+  &:hover {
+    @apply scale-105 shadow-lg;
+  }
+
+  &.active {
+    @apply ring-2 ring-text-inverse ring-offset-2 ring-offset-primary-card;
+  }
+}
+
+@utility active {
+  &.tag {
+    @apply ring-2 ring-text-inverse ring-offset-2 ring-offset-primary-card;
+  }
+
+  &.sidebar-item {
+    @apply bg-accent-blue text-white;
+  }
+}
+
+@utility sidebar-item {
+  /* Sidebar items */
+  @apply flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer;
+
+  &:hover {
+    @apply bg-primary-hover;
+  }
+
+  &.active {
+    @apply bg-accent-blue text-white;
+  }
+
+  &.inactive {
+    @apply text-text-secondary hover:text-text-primary;
+  }
+}
+
+@utility inactive {
+  &.sidebar-item {
+    @apply text-text-secondary hover:text-text-primary;
+  }
+}
+
+@utility model-card {
+  /* Model card styling */
+  @apply card transition-all duration-200 cursor-pointer;
+
+  &:hover {
+    @apply transform scale-[1.02] shadow-xl;
+  }
+
+  &:active {
+    @apply scale-[0.98];
+  }
+}
+
+@utility thumbnail {
+  /* Thumbnail container */
+  @apply aspect-square bg-[#232323] flex items-center justify-center overflow-hidden relative;
+
+  & img {
+    @apply w-full h-full object-cover;
+  }
+}
+
+@utility spinner {
+  /* Loading spinner */
+  @apply animate-spin rounded-full border-2 border-t-transparent border-accent-blue;
+}
+
+@utility text-shadow {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+@utility glass {
+  @apply bg-white/10 backdrop-blur-md;
+}
 
 @layer base {
   :root {
     /* Light Mode (Default) */
-    --color-primary-bg: #f3f4f6;
+    --mv-primary-bg: #f3f4f6;
     /* Gray 100 */
-    --color-primary-card: #ffffff;
-    --color-primary-hover: #f9fafb;
+    --mv-primary-card: #ffffff;
+    --mv-primary-hover: #f9fafb;
     /* Gray 50 */
 
-    --color-accent-blue: #3b82f6;
-    --color-accent-gray: #e5e7eb;
+    --mv-accent-blue: #3b82f6;
+    --mv-accent-gray: #e5e7eb;
     /* Gray 200 - used for borders */
-    --color-accent-hover: #d1d5db;
+    --mv-accent-hover: #d1d5db;
     /* Gray 300 */
 
-    --color-text-primary: #111827;
+    --mv-text-primary: #111827;
     /* Gray 900 */
-    --color-text-secondary: #6b7280;
+    --mv-text-secondary: #6b7280;
     /* Gray 500 */
-    --color-text-inverse: #ffffff;
+    --mv-text-inverse: #ffffff;
   }
 
   .dark {
     /* Dark Mode (Original) */
-    --color-primary-bg: #1a1a1a;
-    --color-primary-card: #2d2d2d;
-    --color-primary-hover: #353535;
+    --mv-primary-bg: #1a1a1a;
+    --mv-primary-card: #2d2d2d;
+    --mv-primary-hover: #353535;
 
-    --color-accent-blue: #3b82f6;
-    --color-accent-gray: #404040;
-    --color-accent-hover: #505050;
+    --mv-accent-blue: #3b82f6;
+    --mv-accent-gray: #404040;
+    --mv-accent-hover: #505050;
 
-    --color-text-primary: #ffffff;
-    --color-text-secondary: #a0a0a0;
+    --mv-text-primary: #ffffff;
+    --mv-text-secondary: #a0a0a0;
     /* Keeping #a0a0a0 or #808080 mapping */
-    --color-text-inverse: #111827;
+    --mv-text-inverse: #111827;
   }
 
   * {
@@ -83,110 +245,5 @@
   button:focus,
   input:focus {
     outline: none;
-  }
-}
-
-@layer components {
-
-  /* Card component */
-  .card {
-    @apply bg-primary-card rounded-lg border border-accent-gray overflow-hidden;
-  }
-
-  .card:hover {
-    @apply border-accent-blue;
-  }
-
-  /* Buttons */
-  .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2;
-  }
-
-  .btn-primary {
-    @apply bg-accent-blue text-white hover:bg-blue-600 active:scale-[0.98];
-  }
-
-  .btn-secondary {
-    @apply bg-primary-card text-text-primary border border-accent-gray hover:bg-primary-hover hover:border-accent-hover;
-  }
-
-  .btn-ghost {
-    @apply text-text-primary hover:bg-primary-hover;
-  }
-
-  /* Input fields */
-  .input {
-    @apply w-full bg-primary-bg border border-accent-gray rounded-lg px-4 py-2 text-text-primary placeholder:text-text-secondary transition-colors;
-  }
-
-  .input:focus {
-    @apply border-accent-blue ring-1 ring-accent-blue;
-  }
-
-  /* Tags */
-  .tag {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold cursor-pointer transition-all duration-200;
-  }
-
-  .tag:hover {
-    @apply scale-105 shadow-lg;
-  }
-
-  .tag.active {
-    @apply ring-2 ring-text-inverse ring-offset-2 ring-offset-primary-card;
-  }
-
-  /* Sidebar items */
-  .sidebar-item {
-    @apply flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer;
-  }
-
-  .sidebar-item:hover {
-    @apply bg-primary-hover;
-  }
-
-  .sidebar-item.active {
-    @apply bg-accent-blue text-white;
-  }
-
-  .sidebar-item.inactive {
-    @apply text-text-secondary hover:text-text-primary;
-  }
-
-  /* Model card styling */
-  .model-card {
-    @apply card transition-all duration-200 cursor-pointer;
-  }
-
-  .model-card:hover {
-    @apply transform scale-[1.02] shadow-xl;
-  }
-
-  .model-card:active {
-    @apply scale-[0.98];
-  }
-
-  /* Thumbnail container */
-  .thumbnail {
-    @apply aspect-square bg-[#232323] flex items-center justify-center overflow-hidden relative;
-  }
-
-  .thumbnail img {
-    @apply w-full h-full object-cover;
-  }
-
-  /* Loading spinner */
-  .spinner {
-    @apply animate-spin rounded-full border-2 border-t-transparent border-accent-blue;
-  }
-}
-
-@layer utilities {
-  .text-shadow {
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  }
-
-  .glass {
-    @apply bg-white/10 backdrop-blur-md;
   }
 }

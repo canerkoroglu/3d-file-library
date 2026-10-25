@@ -51,13 +51,13 @@ export default function ImportZipDialog() {
 
     return (
         <div
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4"
             onClick={(e) => {
                 if (e.target === e.currentTarget && !isImporting) closeImportZip();
             }}
         >
             <div className="bg-primary-card w-full max-w-xl rounded-xl border border-accent-gray shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-                <div className="px-6 py-4 border-b border-accent-gray flex items-center justify-between flex-shrink-0">
+                <div className="px-6 py-4 border-b border-accent-gray flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-accent-blue/10 rounded-lg">
                             <FileArchive size={20} className="text-accent-blue" />
@@ -82,7 +82,7 @@ export default function ImportZipDialog() {
                             <div className="divide-y divide-accent-gray border border-accent-gray rounded-lg overflow-hidden text-sm">
                                 {results.map((r) => (
                                     <div key={r.zipPath} className="px-3 py-2 flex items-start gap-3">
-                                        {r.error ? <AlertTriangle size={16} className="text-red-400 mt-0.5 flex-shrink-0" /> : <FileArchive size={16} className="text-text-secondary mt-0.5 flex-shrink-0" />}
+                                        {r.error ? <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" /> : <FileArchive size={16} className="text-text-secondary mt-0.5 shrink-0" />}
                                         <div className="min-w-0 flex-1">
                                             <div className="text-text-primary truncate">{baseName(r.zipPath)}</div>
                                             {r.error ? (
@@ -109,9 +109,9 @@ export default function ImportZipDialog() {
                                 <div className="border border-accent-gray rounded-lg overflow-hidden divide-y divide-accent-gray">
                                     {zipPaths.map((p) => (
                                         <div key={p} className="px-3 py-2 flex items-center gap-3 text-sm">
-                                            <FileArchive size={16} className="text-text-secondary flex-shrink-0" />
+                                            <FileArchive size={16} className="text-text-secondary shrink-0" />
                                             <span className="flex-1 truncate text-text-primary" title={p}>{baseName(p)}</span>
-                                            <button onClick={() => setZipPaths((current) => current.filter((x) => x !== p))} className="p-1 rounded hover:bg-red-500/20 text-text-secondary hover:text-red-400" title="Remove">
+                                            <button onClick={() => setZipPaths((current) => current.filter((x) => x !== p))} className="p-1 rounded-sm hover:bg-red-500/20 text-text-secondary hover:text-red-400" title="Remove">
                                                 <Trash2 size={14} />
                                             </button>
                                         </div>
@@ -150,7 +150,7 @@ export default function ImportZipDialog() {
                     )}
                 </div>
 
-                <div className="px-6 py-4 border-t border-accent-gray bg-primary-card flex justify-end gap-3 flex-shrink-0">
+                <div className="px-6 py-4 border-t border-accent-gray bg-primary-card flex justify-end gap-3 shrink-0">
                     {results ? (
                         <button onClick={closeImportZip} className="btn btn-primary">Done</button>
                     ) : (

@@ -137,7 +137,7 @@ export default function Sidebar() {
     };
 
     return (
-        <div className="w-60 bg-primary-card border-r border-accent-gray flex flex-col flex-shrink-0">
+        <div className="w-60 bg-primary-card border-r border-accent-gray flex flex-col shrink-0">
             <ConfirmDialog
                 isOpen={confirmDialog.isOpen}
                 title={confirmDialog.title}
@@ -193,7 +193,7 @@ export default function Sidebar() {
                                         }
                                     }}
                                     placeholder="Collection name..."
-                                    className="w-full bg-primary-bg text-text-primary text-sm px-2 py-1.5 rounded border border-accent-blue focus:outline-none"
+                                    className="w-full bg-primary-bg text-text-primary text-sm px-2 py-1.5 rounded-sm border border-accent-blue focus:outline-hidden"
                                 />
                             </div>
                         )}
@@ -217,7 +217,7 @@ export default function Sidebar() {
                                             if (e.key === 'Escape') setEditingCollection(null);
                                         }}
                                         onBlur={() => handleRenameCollection(collection.id, editingCollection.name)}
-                                        className="flex-1 bg-primary-bg text-text-primary text-sm px-1 rounded border border-accent-blue focus:outline-none min-w-0"
+                                        className="flex-1 bg-primary-bg text-text-primary text-sm px-1 rounded-sm border border-accent-blue focus:outline-hidden min-w-0"
                                     />
                                 ) : (
                                     <>
@@ -293,7 +293,7 @@ export default function Sidebar() {
                                     <span className={`truncate flex-1 text-left ${folder.isOnline === false ? 'text-text-secondary' : ''}`}>{folder.name}</span>
                                     <button
                                         onClick={(e) => handleRemoveWatchedFolder(folder.id, e)}
-                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded-sm transition-all"
                                         title="Remove watched folder"
                                     >
                                         <X size={14} className="text-red-400" />
@@ -306,7 +306,7 @@ export default function Sidebar() {
             </div>
 
             {/* Tools section */}
-            <div className="p-3 border-t border-accent-gray flex-shrink-0 space-y-1">
+            <div className="p-3 border-t border-accent-gray shrink-0 space-y-1">
                 <h3 className="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-2 px-3">
                     Tools
                 </h3>
@@ -333,14 +333,14 @@ export default function Sidebar() {
                     >
                         <FileX size={18} className="text-red-400" />
                         <span className="flex-1 text-left">Missing Files</span>
-                        <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-semibold tabular-nums">{missingCount}</span>
+                        <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-sm font-semibold tabular-nums">{missingCount}</span>
                     </button>
                 )}
             </div>
 
             {/* Indexing status */}
             {indexProgress?.isRunning && (
-                <div className="px-4 py-2 border-t border-accent-gray flex-shrink-0">
+                <div className="px-4 py-2 border-t border-accent-gray shrink-0">
                     <div className="flex items-center justify-between text-[11px] text-text-secondary mb-1">
                         <span className="flex items-center gap-1.5">
                             <Loader2 size={11} className="animate-spin" /> {indexProgress.total > 0 ? 'Indexing' : 'Rendering previews'}
@@ -352,7 +352,7 @@ export default function Sidebar() {
                         </span>
                     </div>
                     {indexProgress.total > 0 && (
-                        <div className="h-1 bg-primary-bg rounded overflow-hidden">
+                        <div className="h-1 bg-primary-bg rounded-sm overflow-hidden">
                             <div
                                 className="h-full bg-accent-blue transition-all duration-300"
                                 style={{ width: `${((indexProgress.completed + indexProgress.failed) / indexProgress.total) * 100}%` }}
@@ -367,7 +367,7 @@ export default function Sidebar() {
 
             {/* AI analysis status */}
             {aiProgress?.isRunning && (
-                <div className="px-4 py-2 border-t border-accent-gray flex-shrink-0" data-testid="ai-progress">
+                <div className="px-4 py-2 border-t border-accent-gray shrink-0" data-testid="ai-progress">
                     <div className="flex items-center justify-between text-[11px] text-text-secondary mb-1">
                         <span className="flex items-center gap-1.5">
                             <Sparkles size={11} className="text-accent-blue" /> AI analysis
@@ -379,7 +379,7 @@ export default function Sidebar() {
                             </button>
                         </span>
                     </div>
-                    <div className="h-1 bg-primary-bg rounded overflow-hidden">
+                    <div className="h-1 bg-primary-bg rounded-sm overflow-hidden">
                         <div
                             className="h-full bg-accent-blue transition-all duration-300"
                             style={{ width: `${aiProgress.total ? ((aiProgress.completed + aiProgress.failed) / aiProgress.total) * 100 : 0}%` }}
@@ -390,7 +390,7 @@ export default function Sidebar() {
             )}
 
             {/* Bottom section - Settings */}
-            <div className="p-3 border-t border-accent-gray flex-shrink-0">
+            <div className="p-3 border-t border-accent-gray shrink-0">
                 <button
                     onClick={openSettings}
                     className="sidebar-item w-full hover:bg-primary-hover hover:text-text-primary transition-colors"

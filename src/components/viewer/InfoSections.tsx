@@ -31,7 +31,7 @@ export function FileSection({ model, missing }: { model: ModelWithTags; missing:
                 <div>
                     <div className="text-text-secondary text-xs mb-1">Filename</div>
                     <input
-                        className="w-full bg-primary-bg text-text-primary px-3 py-2 rounded-lg border border-transparent focus:border-blue-500 focus:outline-none transition-colors text-sm"
+                        className="w-full bg-primary-bg text-text-primary px-3 py-2 rounded-lg border border-transparent focus:border-blue-500 focus:outline-hidden transition-colors text-sm"
                         value={isRenaming ? renameValue : model.filename}
                         onChange={(e) => {
                             setIsRenaming(true);

@@ -143,13 +143,13 @@ function App() {
         <div className="h-screen w-screen flex flex-col bg-primary-bg overflow-hidden text-text-primary transition-colors duration-200">
             {/* Title bar */}
             <div
-                className="h-12 bg-primary-card border-b border-accent-gray flex items-center justify-center px-20 flex-shrink-0 relative"
+                className="h-12 bg-primary-card border-b border-accent-gray flex items-center justify-center px-20 shrink-0 relative"
                 style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
             >
                 <span className="text-sm font-medium text-text-primary tracking-wide">{APP_NAME}</span>
                 {!window.electronAPI && (
                     <div className="absolute right-4" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-                        <span className="text-xs text-red-400 bg-red-900/20 px-2 py-1 rounded border border-red-500/30">
+                        <span className="text-xs text-red-400 bg-red-900/20 px-2 py-1 rounded-sm border border-red-500/30">
                             API Disconnected
                         </span>
                     </div>
@@ -175,7 +175,7 @@ function App() {
             <ToastHost />
 
             {dragDepth > 0 && (
-                <div className="fixed inset-0 z-[70] bg-accent-blue/10 border-4 border-dashed border-accent-blue pointer-events-none flex items-center justify-center">
+                <div className="fixed inset-0 z-70 bg-accent-blue/10 border-4 border-dashed border-accent-blue pointer-events-none flex items-center justify-center">
                     <div className="bg-primary-card border border-accent-gray rounded-xl px-6 py-4 shadow-2xl flex items-center gap-3 text-text-primary">
                         <FileArchive size={22} className="text-accent-blue" />
                         Drop ZIP archives or STL / 3MF / OBJ files to import

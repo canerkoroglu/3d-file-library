@@ -43,7 +43,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                         </p>
 
                         <div className="bg-primary-bg rounded-lg p-4 mb-6 text-left overflow-auto max-h-40 border border-accent-gray">
-                            <code className="text-xs text-red-400 font-mono break-words whitespace-pre-wrap">
+                            <code className="text-xs text-red-400 font-mono wrap-break-word whitespace-pre-wrap">
                                 {this.state.error?.toString()}
                             </code>
                         </div>

@@ -78,14 +78,14 @@ export default function SettingsModal() {
     const themeButton = (value: 'dark' | 'light' | 'system', label: string) => (
         <button
             onClick={() => setTheme(value)}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${theme === value ? 'bg-primary-card shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+            className={`px-3 py-1.5 rounded-sm text-xs font-medium transition-all ${theme === value ? 'bg-primary-card shadow-xs text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
         >
             {label}
         </button>
     );
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs z-50 flex items-center justify-center p-4">
             <ConfirmDialog
                 isOpen={confirmForget}
                 title="Forget missing files"
@@ -96,7 +96,7 @@ export default function SettingsModal() {
                 onCancel={() => setConfirmForget(false)}
             />
             <div className="bg-primary-card w-full max-w-2xl rounded-xl border border-accent-gray shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-                <div className="px-6 py-4 border-b border-accent-gray flex items-center justify-between flex-shrink-0">
+                <div className="px-6 py-4 border-b border-accent-gray flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-accent-blue/10 rounded-lg">
                             <SettingsIcon size={20} className="text-accent-blue" />
@@ -185,7 +185,7 @@ export default function SettingsModal() {
                                                     e.preventDefault();
                                                     void removeCustomSlicer(slicer.id);
                                                 }}
-                                                className="p-1.5 rounded hover:bg-red-500/20 text-text-secondary hover:text-red-400"
+                                                className="p-1.5 rounded-sm hover:bg-red-500/20 text-text-secondary hover:text-red-400"
                                                 title="Remove"
                                             >
                                                 <Trash2 size={14} />
@@ -232,7 +232,7 @@ export default function SettingsModal() {
                             <Info size={14} /> About
                         </h3>
                         <div className="bg-primary-bg rounded-lg border border-accent-gray p-6 text-center space-y-4">
-                            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center mx-auto shadow-lg">
+                            <div className="w-16 h-16 bg-linear-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center mx-auto shadow-lg">
                                 <SettingsIcon size={32} className="text-white" />
                             </div>
                             <div>
@@ -299,7 +299,7 @@ export default function SettingsModal() {
                     </section>
                 </div>
 
-                <div className="px-6 py-4 border-t border-accent-gray bg-primary-card flex justify-end gap-3 flex-shrink-0">
+                <div className="px-6 py-4 border-t border-accent-gray bg-primary-card flex justify-end gap-3 shrink-0">
                     <button onClick={closeSettings} className="px-4 py-2 bg-primary-hover hover:bg-accent-gray rounded-lg text-sm text-text-primary transition-colors font-medium border border-accent-gray">
                         Close
                     </button>
