@@ -102,9 +102,23 @@ export async function launchApp(options) {
     await send('Runtime.enable');
     await waitFor(`document.readyState === 'complete' && !!document.querySelector('#root')`, { label: 'the page to load' });
 
+    /**
+     * Drags real files from disk onto the middle of the window and drops them, as a user would.
+     * The app only accepts paths that arrive this way or through a file dialog.
+     */
+    const dropFiles = async (files) => {
+        const { result } = await send('Runtime.evaluate', { expression: 'JSON.stringify([innerWidth / 2, innerHeight / 2])', returnByValue: true });
+        const [x, y] = JSON.parse(result.value);
+        const data = { items: [], files, dragOperationsMask: 1 };
+        for (const type of ['dragEnter', 'dragOver', 'drop']) {
+            await send('Input.dispatchDragEvent', { type, x, y, data });
+        }
+    };
+
     return {
         evaluate,
         waitFor,
+        dropFiles,
         logFile,
         async close() {
             try {

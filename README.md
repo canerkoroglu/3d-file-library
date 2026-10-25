@@ -100,13 +100,14 @@ git push --follow-tags
 
 The tag triggers the release workflow, which builds macOS, Windows and Linux installers and uploads them to a **draft** GitHub release together with the update manifests. Publish the draft and installed copies pick it up: the app checks on launch and every six hours (switchable in Settings), shows a banner, downloads on request and installs on restart.
 
-Release builds are code-signed when the signing secrets are configured in the repository, and unsigned otherwise; see [docs/code-signing.md](docs/code-signing.md). Unsigned macOS builds cannot update themselves, so there the banner links to the release page instead.
+How the app is protected is described in [docs/security.md](docs/security.md). Release builds are code-signed when the signing secrets are configured in the repository, and unsigned otherwise; see [docs/code-signing.md](docs/code-signing.md). Unsigned macOS builds cannot update themselves, so there the banner links to the release page instead.
 
 ## Project structure
 
 ```
 electron/
   main.ts              app lifecycle, windows, media:// protocol, shutdown
+  security.ts          app:// protocol, window hardening, user-granted paths
   modelProtocol.ts     model://library/<id> streams library files to the renderer
   logger.ts            mirrors console output to logs/main.log
   preload.ts           context-bridge API exposed to the renderer

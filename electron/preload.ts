@@ -28,7 +28,7 @@ const electronAPI: ElectronAPI = {
     createCollection: (name) => ipcRenderer.invoke('create-collection', name),
     renameCollection: (id, newName) => ipcRenderer.invoke('rename-collection', id, newName),
     deleteCollection: (id) => ipcRenderer.invoke('delete-collection', id),
-    addWatchedFolder: (folderPath) => ipcRenderer.invoke('add-watched-folder', folderPath),
+    addWatchedFolder: () => ipcRenderer.invoke('add-watched-folder'),
     removeWatchedFolder: (id) => ipcRenderer.invoke('remove-watched-folder', id),
     refreshWatchedFolders: () => ipcRenderer.invoke('refresh-watched-folders'),
 
@@ -43,7 +43,14 @@ const electronAPI: ElectronAPI = {
     pickZipFiles: () => ipcRenderer.invoke('pick-zip-files'),
     importZip: (request) => ipcRenderer.invoke('import-zip', request),
     importFilePaths: (paths) => ipcRenderer.invoke('import-file-paths', paths),
-    getPathForFile: (file) => webUtils.getPathForFile(file),
+    // Paths come from webUtils, which only knows real dropped/selected files: the page cannot invent them.
+    acceptDroppedFiles: (files) => {
+        const paths = Array.from(files ?? [])
+            .filter((file): file is File => file instanceof File)
+            .map((file) => webUtils.getPathForFile(file))
+            .filter(Boolean);
+        return ipcRenderer.invoke('grant-dropped-paths', paths);
+    },
 
     // Utilities
     openFolder: (filePath) => ipcRenderer.invoke('open-folder', filePath),

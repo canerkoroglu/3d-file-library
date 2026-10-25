@@ -158,6 +158,16 @@ export const scenarios = [
             const zipPath = path.join(tmpDir, 'Articulated_Dragon_v2-3210987.zip');
             const expected = await fixtures.createThingiverseZip(zipPath);
             const collectionId = await app.evaluate(`window.electronAPI.getCollections().then((c) => c.find((x) => x.type === 'watched').id)`);
+
+            // The page cannot import a path the user did not choose.
+            const refused = await app.evaluate(`window.electronAPI.importZip({ zipPaths: [${JSON.stringify(zipPath)}], collectionId: ${collectionId} }).then(() => 'imported', (e) => e.message)`);
+            assert.match(refused, /Only ZIP files you chose or dropped/);
+
+            // Dropping the archive on the window opens the importer with it listed.
+            await app.dropFiles([zipPath]);
+            await app.waitFor(`[...document.querySelectorAll('button')].some((b) => b.textContent.trim() === 'Import 1')`, { label: 'the ZIP importer with the dropped archive' });
+            await app.evaluate(clickButton('Cancel'));
+            // Now that the user has offered the file, the import is accepted.
             const [result] = await app.evaluate(`window.electronAPI.importZip({ zipPaths: [${JSON.stringify(zipPath)}], collectionId: ${collectionId} })`);
             assert.equal(result.error, undefined);
             assert.equal(result.models, expected.models);

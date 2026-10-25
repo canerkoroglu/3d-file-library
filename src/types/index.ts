@@ -324,7 +324,8 @@ export interface ElectronAPI {
     createCollection: (name: string) => Promise<Collection>;
     renameCollection: (id: number, newName: string) => Promise<void>;
     deleteCollection: (id: number) => Promise<void>;
-    addWatchedFolder: (path?: string) => Promise<Collection>;
+    /** Asks the user to choose a folder, then watches it. */
+    addWatchedFolder: () => Promise<Collection>;
     removeWatchedFolder: (id: number) => Promise<void>;
     refreshWatchedFolders: () => Promise<void>;
 
@@ -342,8 +343,11 @@ export interface ElectronAPI {
     importZip: (request: ZipImportRequest) => Promise<ZipImportResult[]>;
     /** Registers loose model files (e.g. dropped on the window) in place. Returns how many were new. */
     importFilePaths: (paths: string[]) => Promise<number>;
-    /** Resolves the filesystem path of a File from a drag-and-drop event. */
-    getPathForFile: (file: File) => string;
+    /**
+     * Registers files dropped on the window and returns their paths. Only paths obtained here or
+     * from a file dialog are accepted by importFilePaths / importZip.
+     */
+    acceptDroppedFiles: (files: File[]) => Promise<string[]>;
 
     // Utility operations
     openFolder: (path: string) => Promise<void>;

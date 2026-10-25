@@ -1,4 +1,4 @@
-import { app, BrowserWindow, net, protocol, shell } from 'electron';
+import { app, BrowserWindow, net, protocol } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -16,6 +16,7 @@ import { enqueueEnrichment, startEnrichment } from './ai/enrichment';
 import { rebuildSearchIndex } from './library';
 import { initFileLogging } from './logger';
 import { MODEL_SCHEME_PRIVILEGES, registerModelProtocol } from './modelProtocol';
+import { APP_SCHEME_PRIVILEGES, appPageUrl, hardenWebContents, registerAppProtocol } from './security';
 import type { FileType, IndexProgress } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,24 +67,17 @@ function createWindow(): void {
             preload: path.join(__dirname, 'preload.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
+            sandbox: true,
+            webSecurity: true,
         },
     });
-
-    // Defense-in-depth: the app is a single local page, so open external links in the OS
-    // browser and refuse to open new windows or navigate the window away from the app itself.
-    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
-        return { action: 'deny' };
-    });
-    mainWindow.webContents.on('will-navigate', (event, url) => {
-        if (!url.startsWith('file://') && url !== process.env.VITE_DEV_SERVER_URL) event.preventDefault();
-    });
+    // New windows, navigation and <webview> are refused for every window (see hardenWebContents).
 
     if (process.env.VITE_DEV_SERVER_URL) {
         void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
         mainWindow.webContents.openDevTools({ mode: 'detach' });
     } else {
-        void mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+        void mainWindow.loadURL(appPageUrl());
     }
 
     mainWindow.webContents.on('did-fail-load', (_event, code, description) => {
@@ -119,16 +113,16 @@ function createThumbnailWindow(): BrowserWindow {
             preload: path.join(__dirname, 'preload.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
+            sandbox: true,
+            webSecurity: true,
             // Keep timers and rendering running at full speed although the window is never shown.
             backgroundThrottling: false,
         },
     });
-    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    win.webContents.on('will-navigate', (event) => event.preventDefault());
     if (process.env.VITE_DEV_SERVER_URL) {
         void win.loadURL(`${process.env.VITE_DEV_SERVER_URL}#${THUMBNAIL_PAGE_HASH}`);
     } else {
-        void win.loadFile(path.join(__dirname, '../dist/index.html'), { hash: THUMBNAIL_PAGE_HASH });
+        void win.loadURL(appPageUrl(THUMBNAIL_PAGE_HASH));
     }
     return win;
 }
@@ -183,8 +177,10 @@ if (envSetting('SOFTWARE_GL')) {
 initFileLogging(app.getPath('userData'));
 
 protocol.registerSchemesAsPrivileged([
-    { scheme: 'media', privileges: { secure: true, standard: true, supportFetchAPI: true, bypassCSP: true } },
+    // Thumbnails; allowed by the page's Content-Security-Policy (img-src media:), so no CSP bypass.
+    { scheme: 'media', privileges: { secure: true, standard: true, supportFetchAPI: true } },
     MODEL_SCHEME_PRIVILEGES,
+    APP_SCHEME_PRIVILEGES,
 ]);
 
 /** MESHVAULT_WATCH_FOLDERS=<path>[:<path>...] registers watched folders at startup (scripted setups, end-to-end tests). */
@@ -215,6 +211,8 @@ app.whenReady().then(async () => {
     }
     await loadStoredApiKey();
     registerWatchFoldersFromEnv();
+    hardenWebContents();
+    registerAppProtocol(path.join(__dirname, '../dist'));
     registerMediaProtocol();
     registerModelProtocol();
     registerThumbnailIpc();

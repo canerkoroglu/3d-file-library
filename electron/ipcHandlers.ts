@@ -32,6 +32,7 @@ import { importZipFiles } from './zipImport';
 import { getSetting, setSetting } from './settings';
 import { getLogDir } from './logger';
 import { isInsideDir } from './paths';
+import { grantPaths, isGranted } from './security';
 import { buildEmbeddings, cancelEmbeddingBuild } from './ai/embeddings';
 import { APP_VERSION, checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, isAutoCheckEnabled, setAutoCheckEnabled } from './updater';
 import { chatJson, getAiConfig, getAiSettings, testConnection, updateAiSettings } from './ai/provider';
@@ -112,10 +113,18 @@ export function setupIpcHandlers(): void {
         return imported;
     });
 
-    handle('import-file-paths', (_event, paths: string[]): number => {
+    // Called by the preload with paths of files the user dropped on the window (see acceptDroppedFiles).
+    handle('grant-dropped-paths', (_event, paths: unknown): string[] => {
+        const valid = (Array.isArray(paths) ? paths : []).filter((p): p is string => typeof p === 'string' && path.isAbsolute(p) && fs.existsSync(p));
+        grantPaths(valid);
+        return valid;
+    });
+
+    handle('import-file-paths', (_event, paths: unknown): number => {
         let imported = 0;
-        for (const filePath of paths) {
-            if (!fileTypeOf(filePath) || !fs.existsSync(filePath)) continue;
+        for (const filePath of Array.isArray(paths) ? paths : []) {
+            // Only files the user picked or dropped; never arbitrary paths from the page.
+            if (!isGranted(filePath) || !fileTypeOf(filePath) || !fs.existsSync(filePath)) continue;
             const outcome = importModel(path.resolve(filePath), null);
             if (!outcome) continue;
             enqueueModel(outcome.id);
@@ -131,10 +140,17 @@ export function setupIpcHandlers(): void {
             properties: ['openFile', 'multiSelections'],
             filters: [{ name: 'ZIP archives', extensions: ['zip'] }],
         });
-        return result.canceled ? [] : result.filePaths;
+        if (result.canceled) return [];
+        grantPaths(result.filePaths);
+        return result.filePaths;
     });
 
-    handle('import-zip', (_event, request: ZipImportRequest) => importZipFiles(request.zipPaths, request.collectionId));
+    handle('import-zip', (_event, request: ZipImportRequest) => {
+        const zipPaths = Array.isArray(request?.zipPaths) ? request.zipPaths : [];
+        const refused = zipPaths.filter((p) => !isGranted(p));
+        if (refused.length > 0) throw new Error('Only ZIP files you chose or dropped on the window can be imported.');
+        return importZipFiles(zipPaths, asId(request.collectionId, 'collection id'));
+    });
 
     handle('delete-file', (_event, rawId: unknown) => {
         const id = asId(rawId, 'model id');
@@ -219,13 +235,11 @@ export function setupIpcHandlers(): void {
 
     // ============ Watched folders ============
 
-    handle('add-watched-folder', async (event, folderPath?: string): Promise<Collection> => {
-        if (!folderPath) {
-            const result = await dialog.showOpenDialog(windowFor(event)!, { properties: ['openDirectory'] });
-            if (result.canceled || result.filePaths.length === 0) throw new Error('No folder selected');
-            folderPath = result.filePaths[0];
-        }
-        folderPath = path.resolve(folderPath);
+    // The folder always comes from the system dialog, never from the page.
+    handle('add-watched-folder', async (event): Promise<Collection> => {
+        const result = await dialog.showOpenDialog(windowFor(event)!, { properties: ['openDirectory'] });
+        if (result.canceled || result.filePaths.length === 0) throw new Error('No folder selected');
+        const folderPath = path.resolve(result.filePaths[0]);
 
         // Re-activate a previously removed folder instead of creating a duplicate row.
         const existing = db.prepare("SELECT id, is_active FROM collections WHERE type = 'watched' AND folder_path = ?").get(folderPath) as

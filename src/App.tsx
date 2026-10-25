@@ -11,6 +11,9 @@ import { describeError } from './lib/errors';
 import { APP_NAME } from './lib/brand';
 
 // Dialogs and the 3D viewer are loaded on first use so the library grid appears sooner.
+/** Files that can be dropped straight into the library (the formats the app reads). */
+const MODEL_FILE_PATTERN = /\.(stl|3mf|obj|glb|gltf|usdz|step|stp)$/i;
+
 const ModelViewer = lazy(() => import('./components/ModelViewer'));
 const DuplicatesModal = lazy(() => import('./components/DuplicatesModal'));
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
@@ -66,13 +69,13 @@ function App() {
         const onDragOver = (e: DragEvent) => {
             if (hasFiles(e)) e.preventDefault();
         };
-        const onDrop = (e: DragEvent) => {
+        const onDrop = async (e: DragEvent) => {
             if (!hasFiles(e)) return;
             e.preventDefault();
             setDragDepth(0);
-            const paths = Array.from(e.dataTransfer?.files ?? []).map((f) => api.getPathForFile(f)).filter(Boolean);
+            const paths = await api.acceptDroppedFiles(Array.from(e.dataTransfer?.files ?? []));
             const zips = paths.filter((p) => /\.zip$/i.test(p));
-            const models = paths.filter((p) => /\.(stl|3mf|obj)$/i.test(p));
+            const models = paths.filter((p) => MODEL_FILE_PATTERN.test(p));
             if (zips.length > 0) openImportZip(zips);
             if (models.length > 0) {
                 api.importFilePaths(models)

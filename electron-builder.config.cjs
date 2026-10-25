@@ -62,4 +62,14 @@ module.exports = {
         releaseType: 'draft',
     },
     artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
+    // Electron fuses are switches compiled into the shipped binary (see docs/security.md).
+    electronFuses: {
+        runAsNode: false, // ELECTRON_RUN_AS_NODE cannot turn the app into a plain Node.js runtime
+        enableNodeOptionsEnvironmentVariable: false, // NODE_OPTIONS cannot inject code or flags
+        enableNodeCliInspectArguments: false, // --inspect cannot attach a debugger to the main process
+        enableCookieEncryption: true,
+        enableEmbeddedAsarIntegrityValidation: true, // macOS/Windows refuse a modified app.asar
+        onlyLoadAppFromAsar: true, // …and only the validated app.asar is ever loaded
+        grantFileProtocolExtraPrivileges: false, // the UI is served from app://, not file://
+    },
 };

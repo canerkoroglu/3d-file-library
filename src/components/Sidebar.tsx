@@ -86,7 +86,7 @@ export default function Sidebar() {
 
     const handleAddWatchedFolder = async () => {
         try {
-            await window.electronAPI.addWatchedFolder('');
+            await window.electronAPI.addWatchedFolder();
             // Reload collections
             const newCollections = await window.electronAPI.getCollections();
             useStore.getState().setCollections(newCollections);
