@@ -122,15 +122,18 @@ export default function GenericModel({ modelId, fileSize, fileType, options, onE
         };
     }, [modelId, fileSize, fileType, onError, onLoaded]);
 
-    // Apply display options to every mesh whenever they change.
+    // Apply display options to every mesh whenever they change. three.js objects are a mutable scene
+    // graph by design, so updating them in place here is intended (hence the immutability exemptions).
     useEffect(() => {
         if (!prepared) return;
         const clipping = options.clipHeight < 1;
+        // eslint-disable-next-line react-hooks/immutability -- three.js plane, mutated in place
         clipPlane.constant = prepared.height * Math.max(0, options.clipHeight);
 
         for (const [mesh, original] of prepared.originalMaterials) {
             // glTF/USDZ carry their own materials and textures — always show them; 3MF is toggleable.
             const useFile = fileType === '3mf' ? options.fileColors : fileType === 'glb' || fileType === 'usdz' || fileType === 'step';
+            // eslint-disable-next-line react-hooks/immutability -- three.js mesh, mutated in place
             mesh.material = useFile ? original : uniformMaterial;
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             for (const material of materials) {

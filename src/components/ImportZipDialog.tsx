@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { X, FileArchive, Plus, Trash2, FolderOpen, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { useStore } from '../store/store';
 import type { ZipImportResult } from '../types';
@@ -13,18 +13,19 @@ export default function ImportZipDialog() {
     const watched = collections.filter((c) => c.type === 'watched' && c.isOnline !== false);
 
     const [zipPaths, setZipPaths] = useState<string[]>(importZipDialog.zipPaths);
-    const [collectionId, setCollectionId] = useState<number | ''>(watched[0]?.id ?? '');
+    const [chosenCollectionId, setCollectionId] = useState<number | ''>(watched[0]?.id ?? '');
+    // Until the user picks one, the first available watched folder is the destination.
+    const collectionId: number | '' = chosenCollectionId !== '' ? chosenCollectionId : watched.length > 0 ? watched[0].id : '';
     const [isImporting, setIsImporting] = useState(false);
     const [results, setResults] = useState<ZipImportResult[] | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
+    // Archives dropped while the dialog is open replace the list (adjusting state during render).
+    const [shownPaths, setShownPaths] = useState(importZipDialog.zipPaths);
+    if (importZipDialog.zipPaths !== shownPaths) {
+        setShownPaths(importZipDialog.zipPaths);
         setZipPaths(importZipDialog.zipPaths);
-    }, [importZipDialog.zipPaths]);
-
-    useEffect(() => {
-        if (collectionId === '' && watched.length > 0) setCollectionId(watched[0].id);
-    }, [watched, collectionId]);
+    }
 
     const addZips = async () => {
         const picked = await window.electronAPI.pickZipFiles();

@@ -18,6 +18,8 @@ export default function LocalEnvironment({ intensity = 1 }: { intensity?: number
         const texture = pmrem.fromScene(room, 0.04).texture;
         const previous = scene.environment;
         const previousIntensity = scene.environmentIntensity;
+        // The three.js scene is a mutable object by design; setting its environment here is intended.
+        // eslint-disable-next-line react-hooks/immutability
         scene.environment = texture;
         scene.environmentIntensity = intensity;
         room.dispose();

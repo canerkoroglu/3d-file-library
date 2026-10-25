@@ -34,6 +34,8 @@ export default function ModelGrid() {
     const rowHeight = viewMode === 'grid' ? cardWidth + GRID_INFO_HEIGHT + GRID_GAP : LIST_ROW_HEIGHT;
     const rowCount = Math.ceil(models.length / columns);
 
+    // TanStack Virtual returns fresh functions each render; this component is not compiled by React Compiler anyway.
+    // eslint-disable-next-line react-hooks/incompatible-library
     const virtualizer = useVirtualizer({
         count: rowCount,
         getScrollElement: () => scrollEl,

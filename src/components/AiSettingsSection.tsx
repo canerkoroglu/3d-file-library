@@ -21,13 +21,15 @@ export default function AiSettingsSection() {
     const [building, setBuilding] = useState(false);
     const [embeddingStats, setEmbeddingStats] = useState<{ embedded: number; total: number } | null>(null);
 
-    useEffect(() => {
-        if (!aiSettings || dirty) return;
+    // Fill the form from the saved settings whenever they change, unless the user is editing it.
+    const [shownSettings, setShownSettings] = useState<typeof aiSettings>(null);
+    if (aiSettings && !dirty && aiSettings !== shownSettings) {
+        setShownSettings(aiSettings);
         setBaseUrl(aiSettings.baseUrl);
         setModel(aiSettings.model);
         setTimeoutSec(Math.round(aiSettings.timeoutMs / 1000));
         setEmbeddingModel(aiSettings.embeddingModel);
-    }, [aiSettings, dirty]);
+    }
 
     useEffect(() => {
         window.electronAPI.getEmbeddingStats().then(setEmbeddingStats).catch(() => setEmbeddingStats(null));

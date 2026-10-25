@@ -87,7 +87,7 @@ export function tokenize(input: string): Token[] {
         if (i >= n) break;
 
         let key: string | undefined;
-        let value = '';
+        let value: string;
 
         const readQuoted = (): string => {
             const quote = input[i];

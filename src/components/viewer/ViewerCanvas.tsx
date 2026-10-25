@@ -29,14 +29,18 @@ export default function ViewerCanvas({ model, shortcutsEnabled }: ViewerCanvasPr
     const [modelReady, setModelReady] = useState(false);
     const [captureState, setCaptureState] = useState<'idle' | 'saving' | 'saved'>('idle');
     const updateDisplay = (patch: Partial<ViewerDisplayOptions>) => setDisplay((current) => ({ ...current, ...patch }));
+    const resetView = useCallback(() => controlsRef.current?.reset(), []);
 
-    useEffect(() => {
+    // A different model starts with a fresh status and no section cut (adjusting state during render).
+    const [shownModelId, setShownModelId] = useState(model.id);
+    if (model.id !== shownModelId) {
+        setShownModelId(model.id);
         setLoadError(null);
         setModelReady(false);
         setCaptureState('idle');
         setDisplay((current) => ({ ...current, clipHeight: 1 }));
         setShowClip(false);
-    }, [model.id]);
+    }
 
     useEffect(() => {
         if (!shortcutsEnabled) return;
@@ -47,13 +51,13 @@ export default function ViewerCanvas({ model, shortcutsEnabled }: ViewerCanvasPr
             switch (e.key.toLowerCase()) {
                 case 'w': setDisplay((c) => ({ ...c, wireframe: !c.wireframe })); break;
                 case 'g': setShowGrid((v) => !v); break;
-                case 'r': controlsRef.current?.reset(); break;
+                case 'r': resetView(); break;
                 case ' ': e.preventDefault(); setAutoRotate((v) => !v); break;
             }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [shortcutsEnabled]);
+    }, [shortcutsEnabled, resetView]);
 
     const handleLoadError = useCallback((message: string) => setLoadError(message), []);
     const handleLoaded = useCallback(() => setModelReady(true), []);
@@ -79,7 +83,6 @@ export default function ViewerCanvas({ model, shortcutsEnabled }: ViewerCanvasPr
         { key: 'wireframe', icon: <Box size={16} />, active: display.wireframe, title: 'Wireframe (W)', onClick: () => updateDisplay({ wireframe: !display.wireframe }) },
         { key: 'grid', icon: <Grid3x3 size={16} />, active: showGrid, title: 'Grid (G)', onClick: () => setShowGrid((v) => !v) },
         { key: 'clip', icon: <Scissors size={16} />, active: showClip || display.clipHeight < 1, title: 'Section view', onClick: () => setShowClip((v) => !v) },
-        { key: 'reset', icon: <Maximize2 size={16} />, active: false, title: 'Reset view (R)', onClick: () => controlsRef.current?.reset() },
     ] as const;
 
     return (
@@ -134,6 +137,15 @@ export default function ViewerCanvas({ model, shortcutsEnabled }: ViewerCanvasPr
                             {tool.icon}
                         </button>
                     ))}
+                    <button
+                        onClick={resetView}
+                        title="Reset view (R)"
+                        aria-label="Reset view (R)"
+                        aria-pressed={false}
+                        className="p-2 rounded-md transition-colors text-white/80 hover:bg-white/20"
+                    >
+                        <Maximize2 size={16} />
+                    </button>
                     <label className="p-2 rounded-md text-white/80 hover:bg-white/20 cursor-pointer flex items-center" title="Model colour">
                         <Palette size={16} />
                         <input

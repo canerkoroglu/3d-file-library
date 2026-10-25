@@ -29,9 +29,8 @@ export default function BulkActionsBar() {
         return () => document.removeEventListener('mousedown', onMouseDown);
     }, [openMenu]);
 
-    useEffect(() => {
-        if (!visible) setOpenMenu(null);
-    }, [visible]);
+    // A menu left open when the bar hides should not reappear with it.
+    if (!visible && openMenu !== null) setOpenMenu(null);
 
     if (!visible) return null;
 

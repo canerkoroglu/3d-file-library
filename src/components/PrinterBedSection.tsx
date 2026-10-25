@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Ruler } from 'lucide-react';
 import { useStore } from '../store/store';
 
@@ -9,11 +9,14 @@ export default function PrinterBedSection() {
     const [y, setY] = useState('');
     const [z, setZ] = useState('');
 
-    useEffect(() => {
+    // Refill the fields whenever the saved size changes (adjusting state during render, not in an effect).
+    const [shownBed, setShownBed] = useState(bedSize);
+    if (bedSize !== shownBed) {
+        setShownBed(bedSize);
         setX(bedSize ? String(bedSize.x) : '');
         setY(bedSize ? String(bedSize.y) : '');
         setZ(bedSize ? String(bedSize.z) : '');
-    }, [bedSize]);
+    }
 
     const save = () => {
         const values = [parseFloat(x), parseFloat(y), parseFloat(z)];
