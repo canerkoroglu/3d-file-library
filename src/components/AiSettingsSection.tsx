@@ -128,7 +128,7 @@ export default function AiSettingsSection() {
                                 const chosen = AI_PRESETS.find((p) => p.id === e.target.value);
                                 if (chosen) {
                                     setBaseUrl(chosen.baseUrl);
-                                    if ('model' in chosen && chosen.model) setModel(chosen.model);
+                                    if (chosen.model) setModel(chosen.model);
                                 }
                                 setDirty(true);
                             }}

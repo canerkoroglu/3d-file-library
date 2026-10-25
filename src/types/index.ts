@@ -376,6 +376,8 @@ export interface ElectronAPI {
 
     // Updates
     getAppVersion: () => Promise<string>;
+    /** Theme chosen in a version that stored it elsewhere (before the app:// move), if any. */
+    getLegacyTheme: () => Promise<string | null>;
     getUpdateStatus: () => Promise<UpdateStatus>;
     checkForUpdates: () => Promise<UpdateStatus>;
     downloadUpdate: () => Promise<void>;

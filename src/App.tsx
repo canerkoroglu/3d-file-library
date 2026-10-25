@@ -104,6 +104,7 @@ function App() {
 
         const init = async () => {
             try {
+                void useStore.getState().adoptLegacyTheme();
                 await Promise.all([loadTags(), loadCollections()]);
                 await loadModels();
                 setIndexProgress(await api.getIndexProgress());

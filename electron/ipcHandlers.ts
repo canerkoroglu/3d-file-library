@@ -33,6 +33,7 @@ import { getSetting, setSetting } from './settings';
 import { getLogDir } from './logger';
 import { isInsideDir } from './paths';
 import { grantPaths, isGranted } from './security';
+import { getLegacyTheme } from './legacyMigration';
 import { buildEmbeddings, cancelEmbeddingBuild } from './ai/embeddings';
 import { APP_VERSION, checkForUpdates, downloadUpdate, getUpdateStatus, installUpdate, isAutoCheckEnabled, setAutoCheckEnabled } from './updater';
 import { chatJson, getAiConfig, getAiSettings, testConnection, updateAiSettings } from './ai/provider';
@@ -361,6 +362,7 @@ export function setupIpcHandlers(): void {
     });
 
     handle('get-app-version', () => APP_VERSION);
+    handle('get-legacy-theme', () => getLegacyTheme());
 
     handle('open-external', async (_event, url: string) => {
         if (!/^https:\/\//i.test(url)) throw new Error('Only https links can be opened');

@@ -78,6 +78,7 @@ const electronAPI: ElectronAPI = {
 
     // Updates
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+    getLegacyTheme: () => ipcRenderer.invoke('get-legacy-theme'),
     getUpdateStatus: () => ipcRenderer.invoke('updates:get-status'),
     checkForUpdates: () => ipcRenderer.invoke('updates:check'),
     downloadUpdate: () => ipcRenderer.invoke('updates:download'),

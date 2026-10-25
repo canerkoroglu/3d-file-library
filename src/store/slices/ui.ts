@@ -11,6 +11,14 @@ export function applyThemeToDom(theme: Theme): void {
     }
 }
 
+function hasStoredTheme(): boolean {
+    try {
+        return localStorage.getItem('theme') !== null;
+    } catch {
+        return false;
+    }
+}
+
 function readStoredTheme(): Theme {
     try {
         const stored = localStorage.getItem('theme');
@@ -40,6 +48,11 @@ export const createUiSlice: Slice<UiSlice> = (set, get) => ({
             // storage unavailable
         }
         applyThemeToDom(theme);
+    },
+    adoptLegacyTheme: async () => {
+        if (hasStoredTheme()) return;
+        const legacy = await window.electronAPI.getLegacyTheme().catch(() => null);
+        if (legacy === 'dark' || legacy === 'light' || legacy === 'system') get().setTheme(legacy);
     },
     setViewMode: (mode) => set({ viewMode: mode }),
     openViewer: (model) => set({ selectedModel: model, isViewerOpen: true }),

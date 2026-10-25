@@ -11,7 +11,7 @@ Start here when something does not work. If your problem is not listed, the log 
 | macOS: *"cannot be opened because the developer cannot be verified"* | Unsigned build. Right-click the app → **Open** → **Open**, once. |
 | Linux: the AppImage does nothing | Make it executable: `chmod +x MeshVault-*.AppImage`. On Ubuntu 24.04+ you may also need `libfuse2`. |
 | The app opens to an error screen | Restart it. If it persists, send the log (see [Reporting a bug](#reporting-a-bug)). |
-| My theme setting was reset after updating | Expected once after the update to the version that moved the interface to the `app://` address; choose it again in Settings → Appearance. |
+| My theme setting was reset after updating | The theme is carried over automatically when updating from 1.0.2 or earlier. If it was not, choose it again in Settings → Appearance. |
 
 ## Library and files
 

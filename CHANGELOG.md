@@ -20,6 +20,8 @@ All notable changes to MeshVault are listed here. The format follows
   viewer and dialogs load on first use.
 - Settings → About: *Open log folder*; the GitHub button is now *Source code*.
 - Dropping GLB, glTF, USDZ and STEP files on the window now adds them (before: only STL, 3MF and OBJ).
+- The AI server list now offers only generic local servers (Ollama, LM Studio, llama.cpp); a saved
+  custom server keeps working and shows as *Custom / remote server*.
 - Updated to Electron 45, Vite 8, TypeScript 7, Tailwind CSS 4, ESLint 10, three.js 0.186,
   better-sqlite3 13 and chokidar 6. Building the app no longer needs a C++ compiler.
 

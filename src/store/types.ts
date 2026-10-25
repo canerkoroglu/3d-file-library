@@ -57,6 +57,8 @@ export interface UiSlice {
     dismissedUpdateVersion: string | null;
 
     setTheme: (theme: Theme) => void;
+    /** Adopts the theme saved by an older version when this one has none yet. */
+    adoptLegacyTheme: () => Promise<void>;
     setViewMode: (mode: 'grid' | 'list') => void;
     openViewer: (model: ModelWithTags) => void;
     closeViewer: () => void;

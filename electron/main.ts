@@ -17,6 +17,7 @@ import { rebuildSearchIndex } from './library';
 import { initFileLogging } from './logger';
 import { MODEL_SCHEME_PRIVILEGES, registerModelProtocol } from './modelProtocol';
 import { APP_SCHEME_PRIVILEGES, appPageUrl, hardenWebContents, registerAppProtocol } from './security';
+import { readLegacyPreferences } from './legacyMigration';
 import type { FileType, IndexProgress } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -218,6 +219,8 @@ app.whenReady().then(async () => {
     registerThumbnailIpc();
     setupIpcHandlers();
     setThumbnailWindowFactory(createThumbnailWindow);
+    // Development runs on the Vite server's origin, which never used file://.
+    if (!process.env.VITE_DEV_SERVER_URL) readLegacyPreferences();
     createWindow();
 
     startIndexer({
