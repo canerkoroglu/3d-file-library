@@ -58,7 +58,9 @@ To host the server on a GPU box, `deploy/ai/` contains a Docker Compose stack (O
 
 ## Tech stack
 
-Electron 45, React 19, TypeScript, Three.js (react-three-fiber), Tailwind CSS, better-sqlite3 13 with FTS5, Zustand, Vite 8.
+Electron 45, React 19, TypeScript 7, Three.js (react-three-fiber), Tailwind CSS 4, better-sqlite3 13 with FTS5, Zustand, Vite 8, ESLint 10.
+
+TypeScript 7 (the native compiler, installed as `@typescript/native`) runs `npm run typecheck`. TypeScript 6 stays installed under the `typescript` name because typescript-eslint needs the compiler API that TypeScript 7 does not offer yet; this is Microsoft's recommended side-by-side setup.
 
 ## Development
 

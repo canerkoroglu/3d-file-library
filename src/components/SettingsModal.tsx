@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, Settings as SettingsIcon, Monitor, Github, Info, Database, RefreshCw, FileX, ExternalLink, Plus, Trash2, Download, Loader2, FileText } from 'lucide-react';
+import { X, Settings as SettingsIcon, Monitor, Code2, Info, Database, RefreshCw, FileX, ExternalLink, Plus, Trash2, Download, Loader2, FileText } from 'lucide-react';
 import { useStore } from '../store/store';
 import { APP_NAME } from '../lib/brand';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -286,7 +286,7 @@ export default function SettingsModal() {
                                     onClick={() => window.open('https://github.com/canerkoroglu/3d-file-library', '_blank')}
                                     className="flex items-center gap-2 px-4 py-2 bg-primary-card hover:bg-primary-hover rounded-lg text-sm text-text-primary transition-colors border border-accent-gray"
                                 >
-                                    <Github size={16} /> GitHub
+                                    <Code2 size={16} /> Source code
                                 </button>
                                 <button
                                     onClick={() => window.electronAPI.openLogsFolder().catch((error) => reportError('Could not open the log folder', error))}
