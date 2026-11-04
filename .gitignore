@@ -40,3 +40,6 @@ Thumbs.db
 build_*.txt
 # electron-builder output
 release/
+
+# Test coverage
+coverage/
