@@ -77,7 +77,8 @@ async function analyze(job: AnalysisJob): Promise<AnalysisResult> {
     let thumbnail: AnalysisResult['thumbnail'] = null;
     for (const candidate of candidates) {
         if (STRENGTH[candidate.source] <= job.existingThumbnailStrength) continue;
-        const outputPath = path.join(job.thumbnailDir, `${job.modelId}.png`);
+        // A temporary name: the main process installs it only if it still beats the current thumbnail.
+        const outputPath = path.join(job.thumbnailDir, `${job.modelId}.${process.pid}-${Date.now()}.tmp.png`);
         try {
             await writeThumbnail(candidate.input, outputPath);
             thumbnail = { path: outputPath, source: candidate.source };

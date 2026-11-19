@@ -29,8 +29,9 @@ export default function BulkActionsBar() {
         return () => document.removeEventListener('mousedown', onMouseDown);
     }, [openMenu]);
 
-    // A menu left open when the bar hides should not reappear with it.
+    // A menu or removal prompt left open when the bar hides should not reappear with it.
     if (!visible && openMenu !== null) setOpenMenu(null);
+    if (!visible && confirmRemove) setConfirmRemove(false);
 
     if (!visible) return null;
 

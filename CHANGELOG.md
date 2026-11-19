@@ -44,6 +44,25 @@ All notable changes to MeshVault are listed here. The format follows
 - Packaged Linux builds failed to start (an image library was left inside the app archive).
 - GPU memory from textured models is released when the viewer closes.
 - "Similar models" no longer mixes results from different embedding models.
+- Renaming a collection in the sidebar now saves.
+- 3MF size, volume and triangle stats respect object placement, scaling, repeated parts and the file's
+  unit (e.g. inches), matching what the viewer shows.
+- ASCII STL files that start with a byte-order mark or spaces are no longer misread as binary.
+- *Regenerate thumbnails* replaces existing rendered previews instead of discarding the new render.
+- A thumbnail captured while the model is being indexed is no longer overwritten by an embedded or
+  folder preview.
+- Renaming a file onto the name of a missing model is refused instead of leaving the library out of sync.
+- One file vanishing during a folder scan no longer aborts the whole scan (or app start-up).
+- Hidden watched folders (e.g. `~/.prints`) pick up new and changed files.
+- Removing a watched folder can no longer be undone by the background availability check.
+- A downloaded update stays ready to install instead of reverting to *Download* on the next check.
+- Starting Ollama after a failed connection is detected right away (no 5-minute stale cache).
+- AI category matching no longer files e.g. "smartphone holder" under *art*.
+- The viewer reflects collection, metadata and rename changes immediately, even for models outside the
+  current list; Esc no longer closes the viewer behind Settings.
+- The AI timeout field accepts typed values; a failed AI-settings save keeps the form's edits.
+- The bulk-remove prompt no longer reappears after Esc; ZIPs dropped on an open import dialog are added
+  to its list; the duplicate finder keeps its spinner until its scan finishes.
 
 ## [1.0.2] — 2026-10-22
 

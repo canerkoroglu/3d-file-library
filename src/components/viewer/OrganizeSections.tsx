@@ -5,13 +5,20 @@ import { useStore } from '../../store/store';
 import type { ModelWithTags } from '../../types';
 
 export function CollectionsSection({ model }: { model: ModelWithTags }) {
-    const { collections, loadModels, reportError } = useStore();
+    const { collections, loadModels, patchModel, reportError } = useStore();
     const userCollections = collections.filter((c) => c.type === 'collection');
 
     const toggleCollection = async (collectionId: number, checked: boolean) => {
         try {
             if (checked) await window.electronAPI.addModelToCollection(model.id, collectionId);
             else await window.electronAPI.removeModelFromCollection(model.id, collectionId);
+            // Update the open model directly: it may not be in the loaded page that loadModels refreshes.
+            patchModel(model.id, (m) => ({
+                ...m,
+                collectionIds: checked
+                    ? [...new Set([...m.collectionIds, collectionId])]
+                    : m.collectionIds.filter((id) => id !== collectionId),
+            }));
             await loadModels();
         } catch (error) {
             reportError('Could not update the collection', error);

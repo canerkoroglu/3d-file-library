@@ -2,7 +2,8 @@
 import fs from 'fs';
 import path from 'path';
 import { getDatabase } from '../database';
-import type { SourceMetadata, ThumbnailSource } from '../../src/types';
+import { getThumbnailPath } from '../paths';
+import type { RenamedFile, SourceMetadata, ThumbnailSource } from '../../src/types';
 import type { AnalysisResult } from '../analyzers/types';
 import { THUMBNAIL_STRENGTH } from './core';
 import { safeJson } from './rows';
@@ -25,17 +26,47 @@ export function thumbnailStrengthOf(modelId: number): number {
     return row.thumbnail_source ? THUMBNAIL_STRENGTH[row.thumbnail_source] ?? 0 : 0;
 }
 
+/** Deletes the temporary thumbnail a worker result carries, if any (the result is being dropped). */
+export function discardAnalysisThumbnail(result: AnalysisResult): void {
+    if (result.thumbnail) fs.rmSync(result.thumbnail.path, { force: true });
+}
+
+/**
+ * The worker writes candidate thumbnails to a temporary file. It only replaces the model's thumbnail
+ * if it still beats the current one: the user may have captured one while the job was in flight.
+ */
+function adoptAnalysisThumbnail(modelId: number, thumbnail: NonNullable<AnalysisResult['thumbnail']>): string | null {
+    if (THUMBNAIL_STRENGTH[thumbnail.source] <= thumbnailStrengthOf(modelId)) {
+        fs.rmSync(thumbnail.path, { force: true });
+        return null;
+    }
+    const finalPath = getThumbnailPath(modelId);
+    try {
+        fs.renameSync(thumbnail.path, finalPath);
+        return finalPath;
+    } catch (error) {
+        console.error(`[Thumbnails] Could not install thumbnail for model ${modelId}:`, error);
+        fs.rmSync(thumbnail.path, { force: true });
+        return null;
+    }
+}
+
 export function applyAnalysis(modelId: number, result: AnalysisResult): void {
     const db = getDatabase();
     const now = new Date().toISOString();
 
     if (result.unchanged) {
+        discardAnalysisThumbnail(result);
         db.prepare('UPDATE models SET indexed_at = COALESCE(indexed_at, ?) WHERE id = ?').run(now, modelId);
         return;
     }
 
     const existing = db.prepare('SELECT source_metadata FROM models WHERE id = ?').get(modelId) as { source_metadata: string | null } | undefined;
-    if (!existing) return;
+    if (!existing) {
+        discardAnalysisThumbnail(result);
+        return;
+    }
+    const thumbnailPath = result.thumbnail ? adoptAnalysisThumbnail(modelId, result.thumbnail) : null;
 
     // Fill in detected license and source only where the user has not set them.
     const source = safeJson<SourceMetadata>(existing.source_metadata) ?? {};
@@ -69,8 +100,8 @@ export function applyAnalysis(modelId: number, result: AnalysisResult): void {
             modelId,
         );
 
-        if (result.thumbnail) {
-            setThumbnail(modelId, result.thumbnail.path, result.thumbnail.source);
+        if (thumbnailPath && result.thumbnail) {
+            setThumbnail(modelId, thumbnailPath, result.thumbnail.source);
         }
     })();
 
@@ -97,7 +128,7 @@ export async function isSameFile(a: string, b: string): Promise<boolean> {
     }
 }
 
-export async function renameModelFile(modelId: number, newName: string): Promise<void> {
+export async function renameModelFile(modelId: number, newName: string): Promise<RenamedFile> {
     const db = getDatabase();
     const model = db.prepare('SELECT filepath FROM models WHERE id = ?').get(modelId) as { filepath: string } | undefined;
     if (!model) throw new Error('Model not found');
@@ -112,7 +143,12 @@ export async function renameModelFile(modelId: number, newName: string): Promise
     if (!safeName.toLowerCase().endsWith(ext.toLowerCase())) safeName += ext;
 
     const newPath = path.join(dir, safeName);
-    if (newPath === oldPath) return;
+    if (newPath === oldPath) return { filename: safeName, filepath: newPath };
+
+    // A model flagged missing keeps its row (and its UNIQUE filepath) even though the file is gone.
+    if (db.prepare('SELECT 1 FROM models WHERE filepath = ? AND id != ?').get(newPath, modelId)) {
+        throw new Error('A file with that name already exists');
+    }
 
     // On case-insensitive file systems (Windows, default macOS) "Part.stl" -> "part.stl" points at the
     // same file, so existsSync() is true. Only reject when the target is genuinely a different file.
@@ -138,4 +174,5 @@ export async function renameModelFile(modelId: number, newName: string): Promise
     db.prepare('UPDATE models SET filename = ?, filepath = ?, modified_at = ? WHERE id = ?')
         .run(safeName, newPath, new Date().toISOString(), modelId);
     refreshSearchIndex(modelId);
+    return { filename: safeName, filepath: newPath };
 }

@@ -107,9 +107,12 @@ export interface LibrarySlice {
     createTag: (name: string, color: string) => Promise<void>;
     addTagToModel: (modelId: number, tagId: number) => Promise<void>;
     removeTagFromModel: (modelId: number, tagId: number) => Promise<void>;
+    /** Applies a local change to a model, both in the loaded page and in the open viewer. */
+    patchModel: (modelId: number, update: (model: ModelWithTags) => ModelWithTags) => void;
 }
 
 export interface DuplicatesSlice {
+    isScanningDuplicates: boolean;
     isDuplicatesModalOpen: boolean;
     duplicateGroups: DuplicateGroup[];
     nearDuplicateGroups: NearDuplicateGroup[];
@@ -147,7 +150,8 @@ export interface AssistantSlice {
     isTranslating: boolean;
 
     loadAiSettings: () => Promise<void>;
-    updateAiSettings: (update: AiSettingsUpdate) => Promise<void>;
+    /** Resolves to whether the settings were saved (failures are reported as a toast). */
+    updateAiSettings: (update: AiSettingsUpdate) => Promise<boolean>;
     loadBedSize: () => Promise<void>;
     updateBedSize: (bed: BedSize | null) => Promise<void>;
     setAiProgress: (progress: AiProgress | null) => void;

@@ -73,7 +73,7 @@ const DuplicatesModal = () => {
         wastedSpace,
         checkForDuplicates,
         deleteDuplicate,
-        isLoading,
+        isScanningDuplicates,
     } = useStore();
 
     useEffect(() => {
@@ -109,7 +109,7 @@ const DuplicatesModal = () => {
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-                    {isLoading ? (
+                    {isScanningDuplicates ? (
                         <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-4">
                             <div className="w-8 h-8 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
                             <p>Scanning for duplicates...</p>

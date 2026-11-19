@@ -20,8 +20,10 @@ export async function isBinaryStl(filepath: string, size: number): Promise<boole
         await fd.read(header, 0, header.length, 0);
         const count = header.readUInt32LE(BINARY_HEADER);
         if (BINARY_HEADER + 4 + count * TRIANGLE_BYTES === size) return true;
-        const start = header.subarray(0, 5).toString('ascii').toLowerCase();
-        return start !== 'solid';
+        // Like three's STLLoader: allow a BOM or leading whitespace before `solid`.
+        const start = header.subarray(0, 10).toString('latin1').toLowerCase();
+        for (let i = 0; i <= 5; i++) if (start.startsWith('solid', i)) return false;
+        return true;
     } finally {
         await fd.close();
     }

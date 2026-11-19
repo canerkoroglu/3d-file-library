@@ -1,6 +1,7 @@
 import { attempt, type DuplicatesSlice, type Slice } from '../types';
 
 export const createDuplicatesSlice: Slice<DuplicatesSlice> = (set, get) => ({
+    isScanningDuplicates: false,
     isDuplicatesModalOpen: false,
     duplicateGroups: [],
     nearDuplicateGroups: [],
@@ -10,7 +11,7 @@ export const createDuplicatesSlice: Slice<DuplicatesSlice> = (set, get) => ({
     closeDuplicatesModal: () => set({ isDuplicatesModalOpen: false, duplicateGroups: [], nearDuplicateGroups: [], wastedSpace: null }),
 
     checkForDuplicates: async () => {
-        set({ isLoading: true });
+        set({ isScanningDuplicates: true });
         try {
             const report = await window.electronAPI.findDuplicates();
             set({
@@ -21,7 +22,7 @@ export const createDuplicatesSlice: Slice<DuplicatesSlice> = (set, get) => ({
         } catch (error) {
             get().reportError('Duplicate scan failed', error);
         } finally {
-            set({ isLoading: false });
+            set({ isScanningDuplicates: false });
         }
     },
 

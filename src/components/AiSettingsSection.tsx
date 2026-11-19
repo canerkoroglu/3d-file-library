@@ -4,6 +4,11 @@ import { useStore } from '../store/store';
 import { AI_PRESETS } from '../lib/aiPresets';
 import type { AiConnectionResult } from '../types';
 
+/** The response timeout in whole seconds, kept within 5–600. */
+function clampTimeoutSec(text: string): number {
+    return Math.max(5, Math.min(600, Math.round(Number(text) || 0)));
+}
+
 /** The "AI assistant" block of the settings dialog: server, model, connection test and library analysis. */
 export default function AiSettingsSection() {
     const { aiSettings, updateAiSettings, aiProgress, enrichModels, cancelEnrichment, libraryStats, reportError } = useStore();
@@ -16,7 +21,8 @@ export default function AiSettingsSection() {
     const [testing, setTesting] = useState(false);
     const [result, setResult] = useState<AiConnectionResult | null>(null);
     const [saving, setSaving] = useState(false);
-    const [timeoutSec, setTimeoutSec] = useState(90);
+    // Raw text while typing; clamped to 5–600 s when saved, tested or the field loses focus.
+    const [timeoutText, setTimeoutText] = useState('90');
     const [embeddingModel, setEmbeddingModel] = useState('');
     const [building, setBuilding] = useState(false);
     const [embeddingStats, setEmbeddingStats] = useState<{ embedded: number; total: number } | null>(null);
@@ -27,7 +33,7 @@ export default function AiSettingsSection() {
         setShownSettings(aiSettings);
         setBaseUrl(aiSettings.baseUrl);
         setModel(aiSettings.model);
-        setTimeoutSec(Math.round(aiSettings.timeoutMs / 1000));
+        setTimeoutText(String(Math.round(aiSettings.timeoutMs / 1000)));
         setEmbeddingModel(aiSettings.embeddingModel);
     }
 
@@ -42,7 +48,7 @@ export default function AiSettingsSection() {
         baseUrl,
         model,
         embeddingModel,
-        timeoutMs: Math.round(timeoutSec * 1000),
+        timeoutMs: clampTimeoutSec(timeoutText) * 1000,
         ...(clearKey ? { apiKey: null } : apiKey.trim() ? { apiKey } : {}),
     });
 
@@ -70,10 +76,11 @@ export default function AiSettingsSection() {
     const save = async (extra: Partial<{ enabled: boolean; autoEnrich: boolean }> = {}) => {
         setSaving(true);
         try {
-            await updateAiSettings({ ...pendingUpdate(), ...extra });
-            setApiKey('');
-            setClearKey(false);
-            setDirty(false);
+            if (await updateAiSettings({ ...pendingUpdate(), ...extra })) {
+                setApiKey('');
+                setClearKey(false);
+                setDirty(false);
+            }
         } finally {
             setSaving(false);
         }
@@ -210,11 +217,12 @@ export default function AiSettingsSection() {
                             type="number"
                             min={5}
                             max={600}
-                            value={timeoutSec}
+                            value={timeoutText}
                             onChange={(e) => {
-                                setTimeoutSec(Math.max(5, Math.min(600, Math.round(Number(e.target.value) || 0))));
+                                setTimeoutText(e.target.value);
                                 setDirty(true);
                             }}
+                            onBlur={() => setTimeoutText(String(clampTimeoutSec(timeoutText)))}
                             className="input w-full font-mono text-sm"
                             data-testid="ai-timeout"
                         />

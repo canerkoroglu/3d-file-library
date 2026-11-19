@@ -142,7 +142,7 @@ export function initUpdater(onStatus: (status: UpdateStatus) => void): void {
 
 export async function checkForUpdates(): Promise<UpdateStatus> {
     if (!app.isPackaged) return status;
-    if (status.state === 'checking' || status.state === 'downloading') return status;
+    if (status.state === 'checking' || status.state === 'downloading' || status.state === 'downloaded') return status;
     try {
         await autoUpdater.checkForUpdates();
     } catch (error) {

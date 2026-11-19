@@ -11,7 +11,11 @@ export const createAssistantSlice: Slice<AssistantSlice> = (set, get) => ({
         await attempt(get, 'Could not load the AI settings', async () => set({ aiSettings: await window.electronAPI.getAiSettings() }));
     },
     updateAiSettings: async (update) => {
-        await attempt(get, 'Could not save the AI settings', async () => set({ aiSettings: await window.electronAPI.updateAiSettings(update) }));
+        const saved = await attempt(get, 'Could not save the AI settings', async () => {
+            set({ aiSettings: await window.electronAPI.updateAiSettings(update) });
+            return true;
+        });
+        return saved === true;
     },
     loadBedSize: async () => {
         await attempt(get, 'Could not load the printer bed size', async () => set({ bedSize: await window.electronAPI.getBedSize() }));

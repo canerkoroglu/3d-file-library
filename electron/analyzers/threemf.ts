@@ -47,12 +47,60 @@ function extractMetadata(xml: string): Record<string, string> {
     return metadata;
 }
 
-/** Scrapes every <mesh> in the XML fragment into the accumulator; returns the number of meshes. */
-function accumulateMeshes(xml: string, acc: GeometryAccumulator): number {
+/**
+ * Affine 3×4 matrix in row-major order for column vectors: rows are
+ * [m0 m1 m2 m3], [m4 m5 m6 m7], [m8 m9 m10 m11]; x' = m0·x + m1·y + m2·z + m3, etc.
+ */
+type Affine = readonly number[];
+
+const IDENTITY: Affine = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0];
+
+/** Millimetres per 3MF model unit. */
+const UNIT_SCALE: Record<string, number> = {
+    micron: 0.001,
+    millimeter: 1,
+    centimeter: 10,
+    inch: 25.4,
+    foot: 304.8,
+    meter: 1000,
+};
+
+function unitScale(xml: string): number {
+    const m = xml.match(/<model\b([^>]*)>/);
+    const unit = m ? attr(m[1], 'unit') : undefined;
+    return (unit && UNIT_SCALE[unit.toLowerCase()]) || 1;
+}
+
+/** Parses a 3MF `transform` (m00 m01 m02 m10 m11 m12 m20 m21 m22 m30 m31 m32, row-vector form). */
+function parseTransform(value: string | undefined): Affine | undefined {
+    if (!value) return undefined;
+    const t = value.trim().split(/\s+/).map(Number);
+    if (t.length < 12 || t.some((n) => !Number.isFinite(n))) return undefined;
+    return [t[0], t[3], t[6], t[9], t[1], t[4], t[7], t[10], t[2], t[5], t[8], t[11]];
+}
+
+/** a · b (apply b first, then a). */
+function multiply(a: Affine, b: Affine): Affine {
+    const out = new Array<number>(12);
+    for (let r = 0; r < 3; r++) {
+        const a0 = a[r * 4], a1 = a[r * 4 + 1], a2 = a[r * 4 + 2], a3 = a[r * 4 + 3];
+        out[r * 4] = a0 * b[0] + a1 * b[4] + a2 * b[8];
+        out[r * 4 + 1] = a0 * b[1] + a1 * b[5] + a2 * b[9];
+        out[r * 4 + 2] = a0 * b[2] + a1 * b[6] + a2 * b[10];
+        out[r * 4 + 3] = a0 * b[3] + a1 * b[7] + a2 * b[11] + a3;
+    }
+    return out;
+}
+
+/** Scrapes every <mesh> in the XML fragment into the accumulator, transformed by `m`; returns the number of meshes. */
+function accumulateMeshes(xml: string, acc: GeometryAccumulator, m: Affine = IDENTITY): number {
     const xs: number[] = [];
     const ys: number[] = [];
     const zs: number[] = [];
     let meshes = 0;
+    // A mirroring transform flips winding; swap two vertices so signed volumes don't cancel.
+    const det = m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) + m[2] * (m[4] * m[9] - m[5] * m[8]);
+    const flip = det < 0;
 
     // Vertex indices are local to each <mesh>, so reset the vertex table per mesh.
     for (const mesh of xml.matchAll(MESH_RE)) {
@@ -60,15 +108,19 @@ function accumulateMeshes(xml: string, acc: GeometryAccumulator): number {
         const body = mesh[0];
         xs.length = 0; ys.length = 0; zs.length = 0;
         for (const v of body.matchAll(VERTEX_RE)) {
-            xs.push(parseFloat(v[1]));
-            ys.push(parseFloat(v[2]));
-            zs.push(parseFloat(v[3]));
+            const x = parseFloat(v[1]);
+            const y = parseFloat(v[2]);
+            const z = parseFloat(v[3]);
+            xs.push(m[0] * x + m[1] * y + m[2] * z + m[3]);
+            ys.push(m[4] * x + m[5] * y + m[6] * z + m[7]);
+            zs.push(m[8] * x + m[9] * y + m[10] * z + m[11]);
         }
         for (const t of body.matchAll(TRIANGLE_RE)) {
             const a = parseInt(t[1], 10);
-            const b = parseInt(t[2], 10);
-            const c = parseInt(t[3], 10);
+            let b = parseInt(t[2], 10);
+            let c = parseInt(t[3], 10);
             if (a >= xs.length || b >= xs.length || c >= xs.length) continue;
+            if (flip) [b, c] = [c, b];
             acc.addTriangle(xs[a], ys[a], zs[a], xs[b], ys[b], zs[b], xs[c], ys[c], zs[c]);
         }
     }
@@ -77,9 +129,8 @@ function accumulateMeshes(xml: string, acc: GeometryAccumulator): number {
 
 /** Parses one 3MF model part with regexes; meshes can be tens of MB so a DOM is avoided. */
 export function analyzeModelXml(xml: string): { geometry: GeometryStats | null; metadata: Record<string, string> } {
-    const acc = new GeometryAccumulator();
-    const meshes = accumulateMeshes(xml, acc);
-    return { geometry: meshes > 0 ? acc.result() : null, metadata: extractMetadata(xml) };
+    const root = 'model';
+    return { geometry: aggregateGeometry(new Map([[root, xml]]), root), metadata: extractMetadata(xml) };
 }
 
 /** Reads an unprefixed attribute, guarding against matching a longer name's suffix (e.g. `id` in `objectid`). */
@@ -102,6 +153,7 @@ interface PartRef {
     objectId: string;
     /** Model part the object lives in (production extension); undefined = same part. */
     path?: string;
+    transform?: Affine;
 }
 interface PartObject {
     /** The `<object>` body when it holds a mesh directly. */
@@ -113,10 +165,7 @@ interface ParsedPart {
     build: PartRef[];
 }
 
-/**
- * Parses a model part's objects (mesh or components) and build items. Transforms are ignored:
- * bounding-box dimensions are translation-invariant, matching the single-part scraping path.
- */
+/** Parses a model part's objects (mesh or components) and build items, with their transforms. */
 function parseModelParts(xml: string): ParsedPart {
     const objects = new Map<string, PartObject>();
     for (const match of xml.matchAll(OBJECT_RE)) {
@@ -129,7 +178,7 @@ function parseModelParts(xml: string): ParsedPart {
             const components: PartRef[] = [];
             for (const c of body.matchAll(COMPONENT_RE)) {
                 const objectId = attr(c[1], 'objectid');
-                if (objectId) components.push({ objectId, path: pathAttr(c[1]) });
+                if (objectId) components.push({ objectId, path: pathAttr(c[1]), transform: parseTransform(attr(c[1], 'transform')) });
             }
             objects.set(id, { components });
         } else {
@@ -142,7 +191,7 @@ function parseModelParts(xml: string): ParsedPart {
     if (buildMatch) {
         for (const item of buildMatch[1].matchAll(ITEM_RE)) {
             const objectId = attr(item[1], 'objectid');
-            if (objectId) build.push({ objectId, path: pathAttr(item[1]) });
+            if (objectId) build.push({ objectId, path: pathAttr(item[1]), transform: parseTransform(attr(item[1], 'transform')) });
         }
     }
     return { objects, build };
@@ -151,8 +200,9 @@ function parseModelParts(xml: string): ParsedPart {
 /**
  * Sums geometry across every model part, following build items and components — including
  * cross-part `p:path` references from the 3MF production extension — so only built objects are
- * counted, each once (object ids are resolved per part, so ids that collide across parts are
- * kept distinct). Falls back to scraping every mesh when nothing resolves (e.g. no build items).
+ * counted, each placed instance once with its item/component transforms applied (object ids are
+ * resolved per part, so ids that collide across parts are kept distinct). The root's `unit` is
+ * converted to millimetres. Falls back to scraping every mesh when nothing resolves.
  */
 function aggregateGeometry(parts: Map<string, string>, rootPath: string): GeometryStats | null {
     const acc = new GeometryAccumulator();
@@ -165,32 +215,33 @@ function aggregateGeometry(parts: Map<string, string>, rootPath: string): Geomet
         }
         return part;
     };
+    const s = unitScale(parts.get(rootPath) ?? '');
+    const units: Affine = [s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0];
 
-    const counted = new Set<string>();
-    const resolve = (partPath: string, objectId: string, stack: Set<string>): void => {
+    const resolve = (partPath: string, objectId: string, matrix: Affine, stack: Set<string>): void => {
         const key = `${partPath}#${objectId}`;
         if (stack.has(key)) return; // guard against a component cycle
         const object = getPart(partPath).objects.get(objectId);
         if (!object) return;
         if (object.meshBody !== undefined) {
-            if (!counted.has(key)) {
-                counted.add(key);
-                accumulateMeshes(object.meshBody, acc);
-            }
+            accumulateMeshes(object.meshBody, acc, matrix);
             return;
         }
+        const next = new Set(stack).add(key);
         for (const component of object.components ?? []) {
-            resolve(component.path ? normalizePath(component.path) : partPath, component.objectId, new Set(stack).add(key));
+            const childMatrix = component.transform ? multiply(matrix, component.transform) : matrix;
+            resolve(component.path ? normalizePath(component.path) : partPath, component.objectId, childMatrix, next);
         }
     };
 
     for (const item of getPart(rootPath).build) {
-        resolve(item.path ? normalizePath(item.path) : rootPath, item.objectId, new Set());
+        const matrix = item.transform ? multiply(units, item.transform) : units;
+        resolve(item.path ? normalizePath(item.path) : rootPath, item.objectId, matrix, new Set());
     }
 
     // Nothing resolved (no build section, or unresolved references): fall back to every mesh.
     if (acc.triangleCount === 0) {
-        for (const xml of parts.values()) accumulateMeshes(xml, acc);
+        for (const xml of parts.values()) accumulateMeshes(xml, acc, units);
     }
     return acc.result();
 }

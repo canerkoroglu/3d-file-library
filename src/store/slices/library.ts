@@ -184,4 +184,12 @@ export const createLibrarySlice: Slice<LibrarySlice> = (set, get) => ({
             await get().loadModels();
         }
     },
+
+    patchModel: (modelId, update) => {
+        const { models, selectedModel } = get();
+        set({
+            models: models.map((m) => (m.id === modelId ? update(m) : m)),
+            selectedModel: selectedModel?.id === modelId ? update(selectedModel) : selectedModel,
+        });
+    },
 });

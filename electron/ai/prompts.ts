@@ -103,8 +103,9 @@ export function parseEnrichment(raw: unknown, existingTags: string[], model: str
 
     const name = typeof data.name === 'string' ? data.name.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
     const categoryRaw = typeof data.category === 'string' ? data.category.trim().toLowerCase() : '';
+    const categoryWords = categoryRaw.split(/\W+/).filter(Boolean);
     const category = (AI_CATEGORIES as readonly string[]).find((c) => c === categoryRaw)
-        ?? (AI_CATEGORIES as readonly string[]).find((c) => categoryRaw && (c.includes(categoryRaw) || categoryRaw.includes(c.split(' ')[0])))
+        ?? (AI_CATEGORIES as readonly string[]).find((c) => categoryRaw && (c.includes(categoryRaw) || categoryWords.includes(c.split(' ')[0])))
         ?? 'other';
 
     const byLower = new Map(existingTags.map((t) => [t.toLowerCase(), t]));

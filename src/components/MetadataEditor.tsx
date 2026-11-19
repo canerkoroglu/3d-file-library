@@ -32,11 +32,12 @@ const LICENSE_OPTIONS = [
 
 export default function MetadataEditor({ modelId, currentMetadata, onClose }: MetadataEditorProps) {
     const [metadata, setMetadata] = useState<SourceMetadata>(currentMetadata || {});
-    const { loadModels, reportError } = useStore();
+    const { loadModels, patchModel, reportError } = useStore();
 
     const handleSave = async () => {
         try {
             await window.electronAPI.updateModelMetadata(modelId, metadata);
+            patchModel(modelId, (m) => ({ ...m, sourceMetadata: metadata }));
             await loadModels();
             onClose();
         } catch (error) {

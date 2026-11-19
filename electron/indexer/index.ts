@@ -8,7 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDatabase } from '../database';
 import { getThumbnailDir } from '../paths';
-import { applyAnalysis, markModelMissing, notifyUser, thumbnailStrengthOf } from '../library';
+import { applyAnalysis, discardAnalysisThumbnail, markModelMissing, notifyUser, thumbnailStrengthOf } from '../library';
 import type { AnalysisJob, AnalysisResult, WorkerRequest, WorkerResponse } from '../analyzers/types';
 import type { FileType, IndexProgress } from '../../src/types';
 
@@ -235,12 +235,13 @@ function rememberFailure(modelId: number): void {
 }
 
 function handleResult(message: Extract<WorkerResponse, { type: 'result' }>): void {
-    if (stopped) return;
-    const timer = jobTimers.get(message.id);
-    if (timer) clearTimeout(timer);
+    clearTimeout(jobTimers.get(message.id));
     jobTimers.delete(message.id);
-    // A late answer from a job that already timed out is ignored.
-    if (!inflight.delete(message.id)) return;
+    // After shutdown, or for a late answer from a job that already timed out, the result is dropped.
+    if (stopped || !inflight.delete(message.id)) {
+        if (message.ok) discardAnalysisThumbnail(message.data);
+        return;
+    }
 
     if (message.ok) {
         try {
@@ -249,6 +250,7 @@ function handleResult(message: Extract<WorkerResponse, { type: 'result' }>): voi
             completed++;
         } catch (error) {
             console.error(`[Indexer] Failed to apply analysis for model ${message.modelId}:`, error);
+            discardAnalysisThumbnail(message.data);
             failed++;
             rememberFailure(message.modelId);
         }

@@ -20,11 +20,11 @@ export default function ImportZipDialog() {
     const [results, setResults] = useState<ZipImportResult[] | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Archives dropped while the dialog is open replace the list (adjusting state during render).
+    // Archives dropped while the dialog is open join the list (adjusting state during render).
     const [shownPaths, setShownPaths] = useState(importZipDialog.zipPaths);
     if (importZipDialog.zipPaths !== shownPaths) {
         setShownPaths(importZipDialog.zipPaths);
-        setZipPaths(importZipDialog.zipPaths);
+        setZipPaths((current) => [...new Set([...current, ...importZipDialog.zipPaths])]);
     }
 
     const addZips = async () => {

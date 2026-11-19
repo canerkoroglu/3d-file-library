@@ -302,6 +302,11 @@ export interface ThumbnailRenderResult {
     error?: string;
 }
 
+export interface RenamedFile {
+    filename: string;
+    filepath: string;
+}
+
 // Electron IPC API exposed through the preload script
 export interface ElectronAPI {
     // Model operations
@@ -311,7 +316,8 @@ export interface ElectronAPI {
     deleteFile: (id: number) => Promise<void>;
     addModelToCollection: (modelId: number, collectionId: number) => Promise<void>;
     removeModelFromCollection: (modelId: number, collectionId: number) => Promise<void>;
-    renameModelFile: (id: number, newName: string) => Promise<void>;
+    /** Resolves to the name and path the file actually got (unsafe characters replaced, extension kept). */
+    renameModelFile: (id: number, newName: string) => Promise<RenamedFile>;
 
     // Tag operations
     getTags: () => Promise<Tag[]>;

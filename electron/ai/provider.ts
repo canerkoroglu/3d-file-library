@@ -209,13 +209,14 @@ async function detectFlavor(config: AiConfig): Promise<Flavor> {
                 const json = (await response.json()) as { version?: string };
                 if (typeof json.version === 'string') flavor = 'ollama';
             }
+            // Only cache once the server actually answered; a network failure may be transient.
+            flavorCache.set(origin, { flavor, at: Date.now() });
         } finally {
             clearTimeout(timer);
         }
     } catch {
         // not Ollama, or not reachable; the OpenAI path will report the real error
     }
-    flavorCache.set(origin, { flavor, at: Date.now() });
     return flavor;
 }
 

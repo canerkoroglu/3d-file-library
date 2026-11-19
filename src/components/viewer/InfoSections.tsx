@@ -8,6 +8,7 @@ import { Field } from './Field';
 
 export function FileSection({ model, missing }: { model: ModelWithTags; missing: boolean }) {
     const reportError = useStore((s) => s.reportError);
+    const patchModel = useStore((s) => s.patchModel);
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState('');
 
@@ -17,7 +18,9 @@ export function FileSection({ model, missing }: { model: ModelWithTags; missing:
             return;
         }
         try {
-            await window.electronAPI.renameModelFile(model.id, renameValue);
+            const renamed = await window.electronAPI.renameModelFile(model.id, renameValue);
+            // The open viewer may show a model outside the loaded page, so patch it directly.
+            patchModel(model.id, (m) => ({ ...m, ...renamed }));
             setIsRenaming(false);
         } catch (error) {
             reportError('Could not rename the file', error);

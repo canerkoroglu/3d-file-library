@@ -8,7 +8,7 @@ export type { ModelsQuery } from './query';
 export { rebuildSearchIndex, refreshSearchIndex } from './searchIndex';
 export { deleteModel, forgetMissingModels, getLibraryStats, importModel, markFolderModelsMissing, markModelAvailable, markModelMissing, markModelMissingByPath, removeModelByPath, removeModelsOfWatchedFolder } from './records';
 export type { ImportOutcome } from './records';
-export { applyAnalysis, renameModelFile, setThumbnail, thumbnailStrengthOf, updateSourceMetadata } from './updates';
+export { applyAnalysis, discardAnalysisThumbnail, renameModelFile, setThumbnail, thumbnailStrengthOf, updateSourceMetadata } from './updates';
 export { applySuggestedTags, getEnrichmentSource, listAiCategories, listTagNames, setAiMetadata } from './ai';
 export type { EnrichmentSource } from './ai';
 export { findDuplicates, findSimilar, getEmbeddingStats, getModelsNeedingEmbedding, setEmbedding } from './similarity';

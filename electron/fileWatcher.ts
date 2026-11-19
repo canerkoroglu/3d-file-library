@@ -14,6 +14,7 @@ import {
 } from './library';
 import { enqueueModel, dequeueModel } from './indexer';
 import { cancelThumbnailRender } from './thumbnails';
+import type { ImportOutcome } from './library';
 
 interface WatchedFolder {
     id: number;
@@ -76,7 +77,8 @@ export function startWatchingFolder(folderId: number, folderPath: string): void 
     if (watchedFolders.has(folderId)) return;
 
     const watcher = chokidar.watch(folderPath, {
-        ignored: (p) => path.basename(p).startsWith('.'),
+        // Dot-names are skipped below the root only, so a hidden watched folder (~/.prints) still works.
+        ignored: (p) => p !== folderPath && path.basename(p).startsWith('.'),
         persistent: true,
         ignoreInitial: true,
         awaitWriteFinish: { stabilityThreshold: 2000, pollInterval: 200 },
@@ -167,7 +169,14 @@ export async function syncFolder(folderId: number, folderPath: string): Promise<
     const importAll = db.transaction((files: string[]) => {
         const ids: number[] = [];
         for (const file of files) {
-            const outcome = importModel(file, folderId);
+            let outcome: ImportOutcome | null;
+            try {
+                outcome = importModel(file, folderId);
+            } catch (error) {
+                // The file vanished (or became unreadable) since the scan; skip it rather than roll back the folder.
+                console.warn(`[Sync] Could not import ${file}:`, error);
+                continue;
+            }
             if (!outcome) continue;
             if (outcome.created) added++;
             if (outcome.restored) restored++;

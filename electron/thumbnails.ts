@@ -22,6 +22,8 @@ interface RenderJob {
     filepath: string;
     fileType: FileType;
     attempts: number;
+    /** Regenerating: an existing render may be replaced (stronger sources still win). */
+    force: boolean;
 }
 
 let window: BrowserWindow | null = null;
@@ -114,7 +116,7 @@ export function requestThumbnailRender(modelId: number, filepath: string, fileTy
     if (!force && thumbnailStrengthOf(modelId) >= THUMBNAIL_STRENGTH.render) return;
     if (!fs.existsSync(filepath)) return;
 
-    queue.push({ modelId, filepath, fileType, attempts: 0 });
+    queue.push({ modelId, filepath, fileType, attempts: 0, force });
     queuedIds.add(modelId);
     onQueueChange?.();
     if (idleTimer) {
@@ -155,8 +157,10 @@ async function finish(jobId: number, result: ThumbnailRenderResult): Promise<voi
 
     if (result.ok && result.imageData) {
         try {
-            // Re-check: the user may have captured a thumbnail while the render was in progress.
-            if (thumbnailStrengthOf(job.modelId) < THUMBNAIL_STRENGTH.render) {
+            // Re-check: the user may have captured a thumbnail while the render was in progress. A forced
+            // render (regenerate thumbnails) may replace an earlier render, never a stronger source.
+            const strength = thumbnailStrengthOf(job.modelId);
+            if (job.force ? strength <= THUMBNAIL_STRENGTH.render : strength < THUMBNAIL_STRENGTH.render) {
                 await saveThumbnailFromBase64(job.modelId, result.imageData, 'render');
                 console.log(`[Thumbnails] Rendered model ${job.modelId} (${queue.length} left)`);
                 notifyModelsUpdated();

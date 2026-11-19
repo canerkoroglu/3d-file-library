@@ -18,15 +18,18 @@ import { formatDimensions, formatFileSize, formatTriangles } from '../lib/format
 export default function ModelViewer() {
     const selectedModel = useStore((s) => s.selectedModel);
     const closeViewer = useStore((s) => s.closeViewer);
+    const isSettingsOpen = useStore((s) => s.isSettingsOpen);
     const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+    // Dialogs opened on top of the viewer own the keyboard while they are open.
+    const overlayOpen = isEditingMetadata || isSettingsOpen;
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && !isEditingMetadata) closeViewer();
+            if (e.key === 'Escape' && !overlayOpen) closeViewer();
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [closeViewer, isEditingMetadata]);
+    }, [closeViewer, overlayOpen]);
 
     if (!selectedModel) return null;
     const missing = Boolean(selectedModel.missingSince);
@@ -72,7 +75,7 @@ export default function ModelViewer() {
                                 </div>
                             </div>
                         ) : (
-                            <ViewerCanvas model={selectedModel} shortcutsEnabled={!isEditingMetadata} />
+                            <ViewerCanvas model={selectedModel} shortcutsEnabled={!overlayOpen} />
                         )}
                     </div>
 

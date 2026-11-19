@@ -46,6 +46,11 @@ describe('parseEnrichment', () => {
         expect(result.suggestedTags).toEqual([]);
     });
 
+    it('matches category words whole, not as substrings', () => {
+        expect(parseEnrichment({ summary: 'A stand.', category: 'smartphone' }, [], 'm').category).toBe('other');
+        expect(parseEnrichment({ summary: 'A vase.', category: 'wall art' }, [], 'm').category).toBe('art');
+    });
+
     it('rejects replies without a summary', () => {
         expect(() => parseEnrichment({ category: 'tool' }, [], 'm')).toThrow(/summary/);
         expect(() => parseEnrichment('nope', [], 'm')).toThrow(/JSON/);

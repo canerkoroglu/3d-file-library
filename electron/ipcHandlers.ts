@@ -162,8 +162,9 @@ export function setupIpcHandlers(): void {
     });
 
     handle('rename-model-file', async (_event, id: unknown, newName: unknown) => {
-        await renameModelFile(asId(id, 'model id'), asName(newName, 'file name', 255));
+        const renamed = await renameModelFile(asId(id, 'model id'), asName(newName, 'file name', 255));
         notifyModelsUpdated();
+        return renamed;
     });
 
     handle('update-model-metadata', (_event, id: number, metadata: SourceMetadata) => {
@@ -264,9 +265,10 @@ export function setupIpcHandlers(): void {
     });
 
     handle('remove-watched-folder', async (_event, id: number) => {
+        // Deactivate first: the availability poll could otherwise restart the watcher while it closes.
+        db.prepare('UPDATE collections SET is_active = 0 WHERE id = ?').run(id);
         await stopWatchingFolder(id);
         const removed = removeModelsOfWatchedFolder(id);
-        db.prepare('UPDATE collections SET is_active = 0 WHERE id = ?').run(id);
         console.log(`[IPC] Stopped watching folder ${id}; removed ${removed} models from the library`);
         notifyModelsUpdated();
     });

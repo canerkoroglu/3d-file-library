@@ -86,6 +86,17 @@ describe('STL analyzer', () => {
         expect(stats?.bbox).toEqual({ x: 10, y: 20, z: 30 });
         expect(stats?.volume).toBeCloseTo(6000, 3);
     });
+
+    it('detects an ASCII STL that starts with a UTF-8 BOM', async () => {
+        const file = path.join(dir, 'box-bom.stl');
+        writeAsciiStl(file, triangles);
+        fs.writeFileSync(file, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), fs.readFileSync(file)]));
+        const size = fs.statSync(file).size;
+        expect(await isBinaryStl(file, size)).toBe(false);
+        const stats = await analyzeStl(file, size);
+        expect(stats?.triangleCount).toBe(12);
+        expect(stats?.bbox).toEqual({ x: 10, y: 20, z: 30 });
+    });
 });
 
 describe('OBJ analyzer', () => {
@@ -225,6 +236,46 @@ describe('3MF analyzer', () => {
         const result = await analyzeZip({ '3D/3dmodel.model': tetraObject('1') });
         expect(result.geometry?.triangleCount).toBe(4);
         expect(result.geometry?.bbox).toEqual({ x: 2, y: 3, z: 4 });
+    });
+
+    const singleTetra = (unit: string, items: string) => `<?xml version="1.0"?>
+<model unit="${unit}" ${NS}>
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices><vertex x="0" y="0" z="0"/><vertex x="2" y="0" z="0"/><vertex x="0" y="3" z="0"/><vertex x="0" y="0" z="4"/></vertices>
+        <triangles><triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="1" v3="3"/><triangle v1="0" v2="3" v3="2"/><triangle v1="1" v2="2" v3="3"/></triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>${items}</build>
+</model>`;
+
+    it('applies build item translations and counts each placed instance', () => {
+        const xml = singleTetra('millimeter', '<item objectid="1"/><item objectid="1" transform="1 0 0 0 1 0 0 0 1 10 0 0"/>');
+        const geometry = analyzeModelXml(xml).geometry;
+        expect(geometry?.triangleCount).toBe(8);
+        expect(geometry?.bbox).toEqual({ x: 12, y: 3, z: 4 });
+        expect(geometry?.volume).toBeCloseTo(8, 3);
+    });
+
+    it('applies scaling item and component transforms', async () => {
+        const root = `<?xml version="1.0"?>
+<model unit="millimeter" ${NS}>
+  <resources>
+    <object id="2" type="model"><components><component objectid="1" p:path="/3D/Objects/object_1.model" transform="2 0 0 0 2 0 0 0 2 0 0 0"/></components></object>
+  </resources>
+  <build><item objectid="2" transform="1 0 0 0 1 0 0 0 3 5 5 5"/></build>
+</model>`;
+        const result = await analyzeZip({ '_rels/.rels': rels, '3D/3dmodel.model': root, '3D/Objects/object_1.model': tetraObject('1') });
+        expect(result.geometry?.bbox).toEqual({ x: 4, y: 6, z: 24 });
+        expect(result.geometry?.volume).toBeCloseTo(4 * 2 * 2 * 6, 3);
+    });
+
+    it('converts the model unit to millimetres', () => {
+        const geometry = analyzeModelXml(singleTetra('inch', '<item objectid="1"/>')).geometry;
+        expect(geometry?.bbox).toEqual({ x: 50.8, y: 76.2, z: 101.6 });
+        expect(geometry?.volume).toBeCloseTo(4 * 25.4 ** 3, 0);
     });
 });
 
