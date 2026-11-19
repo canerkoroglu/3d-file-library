@@ -54,6 +54,10 @@ All notable changes to MeshVault are listed here. The format follows
 - Renaming a file onto the name of a missing model is refused instead of leaving the library out of sync.
 - One file vanishing during a folder scan no longer aborts the whole scan (or app start-up).
 - Hidden watched folders (e.g. `~/.prints`) pick up new and changed files.
+- Symlinked folders and files inside a watched folder are picked up by the initial scan (link loops
+  and broken links are skipped).
+- Confirmation prompts own the keyboard: ⌘/Ctrl+A can no longer grow the set a bulk *Remove* is about
+  to act on, and Esc cancels the prompt without closing the window behind it.
 - Removing a watched folder can no longer be undone by the background availability check.
 - A downloaded update stays ready to install instead of reverting to *Download* on the next check.
 - Starting Ollama after a failed connection is detected right away (no 5-minute stale cache).

@@ -3,7 +3,6 @@ import path from 'path';
 import fs from 'fs';
 import { getDatabase } from './database';
 import {
-    fileTypeOf,
     importModel,
     libraryEvents,
     markFolderModelsMissing,
@@ -14,6 +13,7 @@ import {
 } from './library';
 import { enqueueModel, dequeueModel } from './indexer';
 import { cancelThumbnailRender } from './thumbnails';
+import { scanDirectory } from './folderScan';
 import type { ImportOutcome } from './library';
 
 interface WatchedFolder {
@@ -114,31 +114,6 @@ export async function stopAllWatchers(): Promise<void> {
 
 export function isFolderWatched(folderId: number): boolean {
     return watchedFolders.has(folderId);
-}
-
-/** Recursively lists supported model files without blocking the event loop. */
-async function scanDirectory(root: string): Promise<string[]> {
-    const found: string[] = [];
-    const stack = [root];
-
-    while (stack.length > 0) {
-        const dir = stack.pop()!;
-        let entries: fs.Dirent[];
-        try {
-            entries = await fs.promises.readdir(dir, { withFileTypes: true });
-        } catch (error) {
-            console.warn(`[Sync] Cannot read ${dir}:`, error);
-            continue;
-        }
-        for (const entry of entries) {
-            if (entry.name.startsWith('.')) continue;
-            const full = path.join(dir, entry.name);
-            if (entry.isDirectory()) stack.push(full);
-            else if (entry.isFile() && fileTypeOf(full)) found.push(full);
-        }
-    }
-
-    return found;
 }
 
 /**

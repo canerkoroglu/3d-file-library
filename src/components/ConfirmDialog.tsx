@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmDialogProps {
@@ -21,6 +22,21 @@ export function ConfirmDialog({
     onCancel,
     isDestructive = true
 }: ConfirmDialogProps) {
+    // While open, the dialog owns the keyboard: a capture listener on window runs before every other
+    // shortcut handler (selection's ⌘A/Esc, the viewer's and Settings' Esc) and stops the event there.
+    useEffect(() => {
+        if (!isOpen) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            e.stopPropagation();
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                onCancel();
+            }
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => window.removeEventListener('keydown', onKeyDown, true);
+    }, [isOpen, onCancel]);
+
     if (!isOpen) return null;
 
     return (
